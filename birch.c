@@ -6,11 +6,12 @@
 
 #include "birch.h"
 #include "server.h"
+#include "lisp.h"
 #include "net.h"
 #include "irc.h"
 
 struct birch *
-birch_new(struct value reg)
+birch_new(struct tree reg)
 {
 	struct birch *b = malloc(sizeof *b);
 	return memset(b, 0, sizeof *b), b->reg = reg, b;
@@ -66,6 +67,8 @@ birch_main(struct birch *b, struct server *server)
 		if (line->type != LINE_CMD || line->cmd != CMD_PRIVMSG)
 			continue;
 
+		lisp_interpret_line(b, server->name, line);
+
 		/* Call the message hooks. */
 		for (struct list *h = b->msg_hook; h; h = h->next)
 			((msg_hook)h->data)(b, server->name, line);
@@ -90,7 +93,9 @@ birch(struct birch *b)
 	}
 }
 
-/* Loads a plugin. */
+/*
+ * Loads a plugin.
+ */
 void
 birch_plug(struct birch *b, const char *path)
 {

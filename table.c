@@ -39,8 +39,8 @@ table_free(struct table *t)
 	free(t);
 }
 
-struct value
-table_add(struct table *t, char *key, struct value v)
+struct tree
+table_add(struct table *t, char *key, struct tree v)
 {
 	uint64_t h = hash(key, strlen(key));
 
@@ -65,7 +65,7 @@ table_add(struct table *t, char *key, struct value v)
 	return b->val[b->len++];
 }
 
-struct value
+struct tree
 table_lookup(struct table *t, char *key)
 {
 	uint64_t h = hash(key, strlen(key));

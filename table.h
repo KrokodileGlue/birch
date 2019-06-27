@@ -11,7 +11,7 @@ struct table {
 	struct bucket {
 		uint64_t *h;
 		char **key;
-		struct value *val;
+		struct tree *val;
 		size_t len;
 	} bucket[TABLE_SIZE];
 };
@@ -19,8 +19,8 @@ struct table {
 struct table *table_new();
 struct table *table_copy(struct table *t);
 void table_free(struct table *t);
-struct value table_lookup(struct table *t, char *key);
-struct value table_add(struct table *t, char *key, struct value v);
+struct tree table_lookup(struct table *t, char *key);
+struct tree table_add(struct table *t, char *key, struct tree v);
 
 #define KEY t_->bucket[i].key[j]
 #define VAL table_lookup(t_, t_->bucket[i].key[j])

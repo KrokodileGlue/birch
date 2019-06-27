@@ -8,7 +8,7 @@ struct server {
 	struct net *net;
 };
 
-struct server *server_new(const char *name, struct value reg);
+struct server *server_new(const char *name, struct tree reg);
 void server_join(struct server *s, const char *chan);
 
 static bool

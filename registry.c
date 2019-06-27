@@ -8,7 +8,7 @@
 #include "table.h"
 
 static void
-reg_set_value(struct value reg, const char *key, struct value val)
+reg_set_tree(struct tree reg, const char *key, struct tree val)
 {
 	char *tok[64] = {0}, *tmp = strdup(key), *t = NULL;
 	unsigned len = 0;
@@ -23,40 +23,40 @@ reg_set_value(struct value reg, const char *key, struct value val)
 			continue;
 		}
 
-		if (table_lookup(table, tok[i]).type == VAL_NIL)
-			table_add(table, tok[i], (struct value)
-			          {VAL_TABLE, .table = table_new()});
+		if (table_lookup(table, tok[i]).type == TREE_NIL)
+			table_add(table, tok[i], (struct tree)
+			          {TREE_TABLE, .table = table_new()});
 
 		table = table_lookup(table, tok[i]).table;
 	}
 }
 
 void
-reg_set_string(struct value reg, const char *key, const char *val)
+reg_set_string(struct tree reg, const char *key, const char *val)
 {
-	assert(reg.type == VAL_TABLE);
-	reg_set_value(reg, key, (struct value)
-	              {VAL_STRING, .string = strdup(val)});
+	assert(reg.type == TREE_TABLE);
+	reg_set_tree(reg, key, (struct tree)
+	              {TREE_STRING, .string = strdup(val)});
 }
 
 void
-reg_set_int(struct value reg, const char *key, int val)
+reg_set_int(struct tree reg, const char *key, int val)
 {
-	assert(reg.type == VAL_TABLE);
-	reg_set_value(reg, key, (struct value)
-	              {VAL_INT, .integer = val});
+	assert(reg.type == TREE_TABLE);
+	reg_set_tree(reg, key, (struct tree)
+	              {TREE_INT, .integer = val});
 }
 
 void
-reg_set_bool(struct value reg, const char *key, bool val)
+reg_set_bool(struct tree reg, const char *key, bool val)
 {
-	assert(reg.type == VAL_TABLE);
-	reg_set_value(reg, key, (struct value)
-	              {VAL_BOOL, .boolean = val});
+	assert(reg.type == TREE_TABLE);
+	reg_set_tree(reg, key, (struct tree)
+	              {TREE_BOOL, .boolean = val});
 }
 
-struct value
-reg_get(struct value reg, const char *fmt, ...)
+struct tree
+reg_get(struct tree reg, const char *fmt, ...)
 {
 	char *tok[64] = {0}, buf[128], *t = NULL;
 	unsigned len = 0;
@@ -73,8 +73,8 @@ reg_get(struct value reg, const char *fmt, ...)
 	struct table *table = reg.table;
 
 	for (unsigned i = 0; i < len - 1; i++) {
-		struct value t = table_lookup(table, tok[i]);
-		if (t.type != VAL_TABLE) return NIL;
+		struct tree t = table_lookup(table, tok[i]);
+		if (t.type != TREE_TABLE) return NIL;
 		table = t.table;
 	}
 
@@ -92,15 +92,15 @@ print_table(struct table *t, int depth)
 }
 
 void
-reg_print(struct value reg, int depth)
+reg_print(struct tree reg, int depth)
 {
-	if (reg.type != VAL_TABLE)
+	if (reg.type != TREE_TABLE)
 		for (int i = 0; i < depth; i++) printf("    ");
 	switch (reg.type) {
-	case VAL_NIL: printf("nil\n"); break;
-	case VAL_TABLE: print_table(reg.table, depth + 1); break;
-	case VAL_STRING: printf("string %s\n", reg.string); break;
-	case VAL_INT: printf("integer %d\n", reg.integer); break;
-	case VAL_BOOL: printf("boolean %s\n", reg.boolean ? "true" : "false"); break;
+	case TREE_NIL: printf("nil\n"); break;
+	case TREE_TABLE: print_table(reg.table, depth + 1); break;
+	case TREE_STRING: printf("string %s\n", reg.string); break;
+	case TREE_INT: printf("integer %d\n", reg.integer); break;
+	case TREE_BOOL: printf("boolean %s\n", reg.boolean ? "true" : "false"); break;
 	}
 }

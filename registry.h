@@ -4,13 +4,13 @@
 
 #include "table.h"
 
-struct value {
-	enum value_type {
-		VAL_NIL,
-		VAL_STRING,
-		VAL_INT,
-		VAL_BOOL,
-		VAL_TABLE
+struct tree {
+	enum tree_type {
+		TREE_NIL,
+		TREE_STRING,
+		TREE_INT,
+		TREE_BOOL,
+		TREE_TABLE
 	} type;
 
 	union {
@@ -21,18 +21,18 @@ struct value {
 	};
 };
 
-#define NIL ((struct value){VAL_NIL,{0}})
+#define NIL ((struct tree){TREE_NIL,{0}})
 
-struct value *value_new(enum value_type type);
+struct tree *tree_new(enum tree_type type);
 
-void reg_set_string(struct value reg, const char *key, const char *val);
-void reg_set_int(struct value reg, const char *key, int val);
-void reg_set_bool(struct value reg, const char *key, bool val);
-struct value reg_get(struct value reg, const char *fmt, ...);
-void reg_print(struct value reg, int depth);
+void reg_set_string(struct tree reg, const char *key, const char *val);
+void reg_set_int(struct tree reg, const char *key, int val);
+void reg_set_bool(struct tree reg, const char *key, bool val);
+struct tree reg_get(struct tree reg, const char *fmt, ...);
+void reg_print(struct tree reg, int depth);
 
-static struct value
+static struct tree
 reg_new(void)
 {
-	return (struct value){VAL_TABLE, .table = table_new()};
+	return (struct tree){TREE_TABLE, .table = table_new()};
 }

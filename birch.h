@@ -6,7 +6,7 @@
 
 struct birch {
 	/* The registry that holds all configuration data. */
-	struct value reg;
+	struct tree reg;
 
 	/* Low-level server objects. */
 	struct list *server;
@@ -17,7 +17,7 @@ struct birch {
 	struct list *msg_hook;
 };
 
-struct birch *birch_new(struct value reg);
+struct birch *birch_new(struct tree reg);
 void birch_connect(struct birch *b);
 void birch_join(struct birch *b);
 void birch(struct birch *b);

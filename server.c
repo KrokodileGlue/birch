@@ -6,7 +6,7 @@
 #include "net.h"
 
 struct server *
-server_new(const char *name, struct value reg)
+server_new(const char *name, struct tree reg)
 {
 	struct server *s = malloc(sizeof *s);
 

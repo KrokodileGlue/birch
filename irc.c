@@ -139,37 +139,6 @@ struct line *line_new(const char *a)
 		strcpy(l->host, a);
 	}
 
-#define LOG(X,...) printf(X, __VA_ARGS__)
-
-#if 1
-	if (l->type == LINE_CMD && l->cmd == CMD_PRIVMSG) {
-		LOG("Msg: <%s!%s@%s> said <%s> in <%s>\n",
-		    l->nick,
-		    l->ident,
-		    l->host,
-		    l->trailing,
-		    l->middle[0]);
-	} else if (l->type == LINE_CMD) {
-		LOG("Line: type=%s\n\
-      prefix=%s\n\
-      cmd=%s\n\
-      trailing=%s\n",
-		    type_str[l->type],
-		    l->prefix,
-		    cmd_str[l->cmd],
-		    l->trailing);
-	} else {
-		LOG("Line: type=%s\n\
-      prefix=%s\n\
-      reply=%d\n\
-      trailing=%s\n",
-		    type_str[l->type],
-		    l->prefix,
-		    l->cmd,
-		    l->trailing);
-	}
-#endif
-
 	return l;
 }
 

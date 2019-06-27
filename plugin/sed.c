@@ -14,7 +14,8 @@ struct channel {
 	kdgu *hist[2048];
 } chan[50];
 
-void hook(struct birch *b, const char *server, struct line *l)
+void
+hook(struct birch *b, const char *server, struct line *l)
 {
 	kdgu **hist = NULL;
 	char **speaker = NULL;
@@ -91,7 +92,8 @@ void hook(struct birch *b, const char *server, struct line *l)
 	}
 }
 
-void reg(struct birch *b)
+void
+reg(struct birch *b)
 {
 	a = ktre_compile(&KDGU("^s([[:punct:]])(.*?)\\1(.*?)\\1(\\w*)$"), 0);
 	birch_hook_msg(b, hook);
