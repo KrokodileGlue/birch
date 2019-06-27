@@ -50,8 +50,14 @@ void hook(struct birch *b, const char *server, struct line *l)
 			}
 		}
 
-		ktre *regex = ktre_compile(A, mode);
+		ktre *regex = ktre_compile(A, mode | KTRE_DEBUG);
 		if (!regex) return;
+
+		if (regex->err) {
+			birch_send(b, server, l->middle[0], "%s: %s", l->nick, regex->err_str);
+			return;
+		}
+
 		kdgu *thing = NULL;
 		char *nick = NULL;
 
