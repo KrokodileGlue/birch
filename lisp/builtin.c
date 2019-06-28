@@ -384,6 +384,8 @@ builtin_cdr(struct value *env, struct value *v)
 struct value *
 builtin_macro(struct value *env, struct value *v)
 {
+	if (!v || !v->cdr)
+		return error(v->loc, "defmacro requires arguments.");
 	struct value *fun = make_function(env, v->cdr, VAL_MACRO);
 	if (fun->type == VAL_ERROR) return fun;
 	return add_variable(env, v->car,fun);

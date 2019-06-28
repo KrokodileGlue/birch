@@ -39,9 +39,9 @@ lisp_interpret_line(struct birch *b, const char *server, struct line *l)
 
 	char *text = NULL;
 
-	if (!strncmp(l->trailing, ",(", 2)) {
+	if (!strncmp(l->trailing, ".(", 2)) {
 		text = strdup(l->trailing + 2);
-	} else if (*l->trailing == ',') {
+	} else if (*l->trailing == '.') {
 		text = malloc(strlen(l->trailing + 1) + 2);
 		strcpy(text, l->trailing + 1);
 		text[strlen(text) + 1] = 0;
@@ -59,13 +59,19 @@ lisp_interpret_line(struct birch *b, const char *server, struct line *l)
 	assert(e);              /* ????? */
 
 	struct value *print = print_value(stdout, e);
+
+	/* This can only happen when the print itself fails. */
+	if (print->type == VAL_ERROR) return;
+
 	kdgu *thing = print->s;
+
+	/* TODO: Think about when this can happen. */
+	if (!thing || !thing->s) return;
 
 	char buf[256];
 	memcpy(buf, thing->s, thing->len);
 	buf[thing->len] = 0;
 	birch_send(b, server, l->middle[0], "%s", buf);
-
 }
 
 void

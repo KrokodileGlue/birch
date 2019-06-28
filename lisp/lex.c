@@ -678,6 +678,7 @@ tok(struct lexer *l, enum mode mode)
 		? lex2(&a, &b, &l->loc.line, &l->loc.column, l->e)
 		: lex1(&a, &b, &l->loc.line, &l->loc.column, l->e);
 	if (t->type == TOK_EOF) return free(t), NULL;
+	if (!b) return free(t), NULL;
 
 	/* Assign the basic fields that all tokens have. */
 

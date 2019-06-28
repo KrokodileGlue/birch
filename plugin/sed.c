@@ -76,9 +76,9 @@ hook(struct birch *b, const char *server, struct line *l)
 		memcpy(buf, thing->s, thing->len);
 		buf[thing->len] = 0;
 		if (!strcmp(l->nick, nick))
-			birch_send(b, server, l->middle[0], "%s meant to say %s", nick, buf);
+			birch_send(b, server, l->middle[0], "%s meant to say: %s", nick, buf);
 		else
-			birch_send(b, server, l->middle[0], "%s thinks %s meant to say %s", l->nick, nick, buf);
+			birch_send(b, server, l->middle[0], "%s thinks %s meant to say: %s", l->nick, nick, buf);
 	} else {
 		memmove(hist + 1, hist, (2048 - 1) * sizeof *hist);
 		memmove(speaker + 1, speaker, (2048 - 1) * sizeof *speaker);

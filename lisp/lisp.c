@@ -137,6 +137,7 @@ print_value(FILE *f, struct value *v)
 		break;
 	case VAL_TRUE: out = kdgu_news("t");        break;
 	case VAL_NIL:  out = kdgu_news("()");       break;
+	case VAL_MACRO:
 	case VAL_FUNCTION:
 		//out = print_tree(f, v);
 		out = kdgu_news("TODO");
