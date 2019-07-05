@@ -1,15 +1,5 @@
-#ifndef LISP_H
-#define LISP_H
-
-#include <stdio.h>
-#include <kdg/kdgu.h>
-#include "location.h"
-#include "lex.h"
-
-typedef struct value *builtin(struct value *, struct value *);
-
 struct value {
-	enum {
+	enum value_type {
 		VAL_INT,
 		VAL_CELL,
 		VAL_STRING,
@@ -24,9 +14,6 @@ struct value {
 		VAL_COMMA,
 		VAL_COMMAT,
 
-		/* GC marker. */
-		VAL_MOVED,
-
 		/* Non-GC values. */
 		VAL_TRUE,
 		VAL_NIL,
@@ -34,6 +21,7 @@ struct value {
 		/* Dummies only used by the parser. */
 		VAL_RPAREN,
 		VAL_DOT,
+		VAL_NULL,
 
 		/* Hot potatoes. */
 		VAL_ERROR,
@@ -41,80 +29,71 @@ struct value {
 	} type;
 
 	union {
-		int i;
-		kdgu *s;
-		char *errmsg;
-
-		/* Cell. */
-		struct {
-			struct value *car, *cdr;
-		};
-
-		/* Function. */
-		struct {
-			struct value *param;
-			struct value *body;
-			struct value *env;
-
-			struct value *optional;
-			struct value *key;
-			struct value *rest;
-		};
-
-		/* Environment. */
-		struct {
-			struct value *vars;
-			struct value *up;
-		};
-
-		/* Array. */
-		struct {
-			struct value **arr;
-			unsigned num;
-		};
-
-		/* Keyword. */
-		struct value *keyword;
-
-		/* Builtin. */
-		builtin *prim;
+		/*
+		 * Index to the object stored by the GC system (if there is
+		 * one).
+		 */
+		unsigned obj;
+		int integer;
 	};
-
-	struct value *docstring;
-	struct location *loc;
 };
 
-struct value *Dot, *RParen, *Nil, *True;
-struct value *list_length(struct value *list);
+/* Environment. */
+struct env {
+	struct value vars;
+	struct env *up;
 
-struct value *quote(struct value *v);
-struct value *backtick(struct value *v);
-struct value *add_variable(struct value *env,
-                           struct value *sym,
-                           struct value *body);
-void add_builtin(struct value *env, const char *name, builtin *f);
-struct value *find(struct value *env, struct value *sym);
+	/*
+	 * The name of the server this environment is associated with
+	 * as it appears in the registry.
+	 */
+	char *server;
+	struct birch *birch;
+	struct object *obj;
+};
 
-struct value *new_environment(void);
-struct value *push_env(struct value *env,
-                       struct value *vars,
-                       struct value *values);
-struct value *make_env(struct value *vars, struct value *up);
-struct value *new_value(struct location *loc);
+typedef struct value builtin(struct env *, struct value);
 
-struct value *cons(struct value *car, struct value *cdr);
-struct value *acons(struct value *x, struct value *y, struct value *a);
-struct value *make_symbol(struct location *loc, const char *s);
-struct value *expand(struct value *env, struct value *v);
+struct value list_length(struct env *env, struct value list);
 
-struct value *print_value(FILE *f, struct value *v);
-void print_tree(FILE *f, struct value *v);
+struct value quote(struct env *env, struct value v);
+struct value backtick(struct env *env, struct value v);
+struct value add_variable(struct env *env,
+                          struct value sym,
+                          struct value body);
+void add_builtin(struct env *env, const char *name, builtin *f);
+struct value find(struct env *env, struct value sym);
 
-struct value *copy_value(struct value *v);
+struct env *new_environment(struct birch *b, const char *server);
+struct env *push_env(struct env *env,
+                     struct value vars,
+                     struct value values);
+struct env *make_env(struct env *env, struct value vars);
+void value_free(struct value v);
+
+struct value cons(struct env *env,
+                  struct value car,
+                  struct value cdr);
+struct value acons(struct env *env,
+                   struct value x,
+                   struct value y,
+                   struct value a);
+struct value make_symbol(struct env *env, const char *s);
+struct value expand(struct env *env, struct value v);
+
+struct value print_value(struct env *env, struct value v);
 
 const char **value_name;
 
-#define TYPE_NAME(X) (X > VAL_ERROR ? (char []){X, 0} : value_name[X])
-#define IS_LIST(X) ((X)->type == VAL_NIL || (X)->type == VAL_CELL)
+#define DOT (struct value){VAL_DOT,{0}}
+#define RPAREN (struct value){VAL_RPAREN,{0}}
+#define NIL (struct value){VAL_NIL,{0}}
+#define TRUE (struct value){VAL_TRUE,{0}}
+#define VNULL (struct value){VAL_NULL,{0}}
 
-#endif
+/*
+ * I think this reports the type as a character because in the parser
+ * sometimes values actually represent characters. TODO?
+ */
+#define TYPE_NAME(X) (X > VAL_NOTE ? (char []){X, 0} : value_name[X])
+#define IS_LIST(X) ((X).type == VAL_NIL || (X).type == VAL_CELL)

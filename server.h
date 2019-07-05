@@ -1,8 +1,3 @@
-#pragma once
-
-#include <string.h>
-#include "list.h"
-
 struct server {
 	char *name;
 	struct net *net;

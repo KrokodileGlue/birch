@@ -1,10 +1,3 @@
-#pragma once
-
-#include <stdlib.h>
-#include <stdint.h>
-#include <stdbool.h>
-#include <stdio.h>
-
 #define TABLE_SIZE 32
 
 struct table {
@@ -22,8 +15,8 @@ void table_free(struct table *t);
 struct tree table_lookup(struct table *t, char *key);
 struct tree table_add(struct table *t, char *key, struct tree v);
 
-#define KEY t_->bucket[i].key[j]
-#define VAL table_lookup(t_, t_->bucket[i].key[j])
+#define KEY (t_->bucket[i].key[j])
+#define VAL (table_lookup(t_, t_->bucket[i].key[j]))
 
 #define TABLE_FOR(T)	  \
 	struct table *t_ = T; \

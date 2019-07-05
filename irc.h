@@ -1,7 +1,3 @@
-#pragma once
-
-#include "net.h"
-
 enum {
 	CMD_PASS,
 	CMD_NICK,

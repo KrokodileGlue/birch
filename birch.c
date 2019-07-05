@@ -1,14 +1,31 @@
 #include <stdarg.h>
+#include <stdio.h>
+#include <stdbool.h>
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <dlfcn.h>
 
-#include "birch.h"
+#include <kdg/kdgu.h>
+
+#include "lisp/lex.h"
+#include "lisp/lisp.h"
+#include "lisp/error.h"
+#include "lisp/util.h"
+#include "lisp/parse.h"
+#include "lisp/eval.h"
+
+#include "lisp/gc.h"
+#include "table.h"
+#include "registry.h"
+#include "list.h"
+
 #include "server.h"
-#include "lisp.h"
 #include "net.h"
 #include "irc.h"
+
+#include "birch.h"
+#include "lisp.h"
 
 struct birch *
 birch_new(struct tree reg)
@@ -68,17 +85,13 @@ birch_main(struct birch *b, struct server *server)
 			continue;
 
 		lisp_interpret_line(b, server->name, line);
-
-		/* Call the message hooks. */
-		for (struct list *h = b->msg_hook; h; h = h->next)
-			((msg_hook)h->data)(b, server->name, line);
 	}
 
 	exit(0);
 }
 
 /*
- * Begins listener threads and launches the main i/o loop.
+ * Begins listener threads and launches the main I/O loop.
  */
 void
 birch(struct birch *b)
@@ -91,24 +104,6 @@ birch(struct birch *b)
 		if (fork() == 0) birch_main(b, server);
 		l = l->next;
 	}
-}
-
-/*
- * Loads a plugin.
- */
-void
-birch_plug(struct birch *b, const char *path)
-{
-	void (*reg)(struct birch *), *lib = dlopen(path, RTLD_LAZY);
-	if (!lib) return;
-	*(void **)(&reg) = dlsym(lib, "reg");
-	reg(b);         /* Call the plugin's registration function. */
-}
-
-void
-birch_hook_msg(struct birch *b, msg_hook f)
-{
-	list_add(&b->msg_hook, f);
 }
 
 void

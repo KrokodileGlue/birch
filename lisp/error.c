@@ -2,45 +2,44 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdio.h>
+#include <kdg/kdgu.h>
 
-#include "error.h"
+#include "lex.h"
 #include "lisp.h"
+#include "../util.h"
+#include "error.h"
+#include "gc.h"
 
-struct value *
-error(struct location *loc, const char *fmt, ...)
+struct value
+error(struct env *env, const char *fmt, ...)
 {
-	struct value *v = new_value(loc);
-	v->type = VAL_ERROR;
-	v->loc = loc;
+	struct value v = gc_alloc(env, VAL_ERROR);
 
-	int l = strlen(fmt) + 1;
-	v->errmsg = malloc(l);
+	/* TODO: Stack smashing innit. */
+	char buf[128];
 
 	va_list args;
 	va_start(args, fmt);
-	int len = vsnprintf(v->errmsg, l, fmt, args) + 1;
 
-	if (len > l) {
-		v->errmsg = realloc(v->errmsg, len);
-		va_start(args, fmt);
-		vsnprintf(v->errmsg, len, fmt, args);
-	}
-
+	/* TODO: Check the return value. */
+	vsnprintf(buf, 128, fmt, args) + 1;
 	va_end(args);
+
+	string(v) = kdgu_news(buf);
 
 	return v;
 }
 
-struct value *
-print_error(FILE *f, struct value *e)
+struct value
+print_error(struct env *env, struct value e)
 {
-	/* TODO: Make this more fancy. */
+	/* TODO: Make this more fancy. Check `buf` size. */
 	char buf[256];
-	sprintf(buf, "%s: %u: %s",
-	        (char *[]){"error","note"}[e->type - VAL_ERROR],
-	        e->loc->column, e->errmsg);
-	struct value *v = new_value(e->loc);
-	v->type = VAL_STRING;
-	v->s = kdgu_news(buf);
+	sprintf(buf, "%s: %s",
+	        (char *[]){"error","note"}[e.type - VAL_ERROR],
+	        tostring(string(e)));
+	struct value v = gc_alloc(env, VAL_STRING);
+	string(v) = kdgu_news(buf);
 	return v;
 }

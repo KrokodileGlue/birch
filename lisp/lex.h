@@ -1,10 +1,3 @@
-#ifndef LEX_H
-#define LEX_H
-
-#include <stdio.h>
-#include <kdg/kdgu.h>
-#include "location.h"
-
 struct token {
 	/*
 	 * There's no point in giving punctuation characters their own
@@ -24,7 +17,7 @@ struct token {
 	} type;
 
 	char *body;            /* Region of input this is from.     */
-	struct location loc;   /* Location in source code.          */
+	int line, column, idx, len;
 
 	/*
 	 * Identifiers don't have their own data field because their
@@ -39,17 +32,11 @@ struct token {
 
 struct lexer {
 	const char *file;      /* Filename.                         */
-	struct location loc;   /* Current input location.           */
 	const char *s;         /* Input stream.                     */
 	const char *e;         /* End of input stream.              */
-};
-
-enum mode {
-	TALK, CODE
+	int idx;               /* Current character.                */
+	int len, line, column;
 };
 
 struct lexer *new_lexer(const char *file, const char *s);
-struct token *tok(struct lexer *l, enum mode mode);
-void print_token(FILE *f, struct token *t);
-
-#endif
+struct token *tok(struct lexer *l);

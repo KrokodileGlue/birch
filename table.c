@@ -1,4 +1,9 @@
+#include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
+
+#include <kdg/kdgu.h>
 
 #include "table.h"
 #include "registry.h"
@@ -77,5 +82,5 @@ table_lookup(struct table *t, char *key)
 		if (b->h[i] == h && !strcmp(key, b->key[i]))
 			return b->val[i];
 
-	return NIL;
+	return REG_NIL;
 }

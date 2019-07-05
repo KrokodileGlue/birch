@@ -1,9 +1,3 @@
-#pragma once
-
-#include <stdbool.h>
-
-#include "table.h"
-
 struct tree {
 	enum tree_type {
 		TREE_NIL,
@@ -21,7 +15,7 @@ struct tree {
 	};
 };
 
-#define NIL ((struct tree){TREE_NIL,{0}})
+#define REG_NIL ((struct tree){TREE_NIL,{0}})
 
 struct tree *tree_new(enum tree_type type);
 

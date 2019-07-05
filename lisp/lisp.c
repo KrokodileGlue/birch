@@ -1,11 +1,19 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <stdbool.h>
+#include <kdg/kdgu.h>
 
+#include "lex.h"
+#include "lisp.h"
 #include "error.h"
 #include "builtin.h"
-#include "lisp.h"
 #include "eval.h"
+#include "gc.h"
+
+#include "../table.h"
+#include "../registry.h"
+#include "../birch.h"
 
 const char **value_name = (const char *[]){
 	"int",
@@ -17,246 +25,219 @@ const char **value_name = (const char *[]){
 	"macro",
 	"env",
 	"array",
-	":",
+	"keywordparam",
 	"keyword",
-	",",
-	",@",
-	"moved",
+	"comma",
+	"commat",
 	"true",
 	"nil",
 	"rparen",
 	"dot",
+	"null",
 	"error",
+	"note",
 };
 
-struct value *Dot = &(struct value){VAL_DOT,{0},NULL,NOWHERE};
-struct value *RParen = &(struct value){VAL_RPAREN,{0},NULL,NOWHERE};
-struct value *Nil = &(struct value){VAL_NIL,{0},NULL,NOWHERE};
-struct value *True = &(struct value){VAL_TRUE,{0},NULL,NOWHERE};
-
-struct value *
-new_value(struct location *loc)
+struct value
+quote(struct env *env, struct value v)
 {
-	struct value *v = malloc(sizeof *v);
-	memset(v, 0, sizeof *v);
-	v->loc = loc;
-	return v;
+	return cons(env, make_symbol(env, "quote"), cons(env, v, NIL));
 }
 
-struct value *
-quote(struct value *v)
+struct value
+backtick(struct env *env, struct value v)
 {
-	return cons(make_symbol(v->loc, "quote"), cons(v, Nil));
+	return cons(env, make_symbol(env, "backtick"), cons(env,v, NIL));
 }
 
-struct value *
-backtick(struct value *v)
-{
-	return cons(make_symbol(v->loc, "backtick"), cons(v, Nil));
-}
-
-struct value *
-list_length(struct value *list)
+struct value
+list_length(struct env *env, struct value list)
 {
 	int len = 0;
 
-	while (list->type != VAL_NIL) {
-		if (list->type == VAL_CELL) {
-			list = list->cdr;
+	while (list.type != VAL_NIL) {
+		if (list.type == VAL_CELL) {
+			list = cdr(list);
 			len++;
 			continue;
 		}
 
-		return error(list->loc,
-		             "a non-dotted list was expected here");
+		return error(env, "a non-dotted list was expected");
 	}
 
-	struct value *r = new_value(list->loc);
-
-	r->type = VAL_INT;
-	r->i = len;
-
-	return r;
+	return (struct value){VAL_INT, {len}};
 }
 
-struct value *
-copy_value(struct value *v)
-{
-	struct value *ret = new_value(v->loc);
-	ret->type = v->type;
-
-	switch (v->type) {
-	case VAL_CELL:
-		ret->car = copy_value(v->car);
-		if (ret->car->type == VAL_ERROR) return ret->car;
-		ret->cdr = copy_value(v->cdr);
-		if (ret->cdr->type == VAL_ERROR) return ret->cdr;
-		break;
-	case VAL_INT:
-		ret->i = v->i;
-		break;
-	case VAL_SYMBOL:
-	case VAL_STRING:
-		ret->s = kdgu_copy(v->s);
-		break;
-	case VAL_COMMAT:
-	case VAL_COMMA:
-		ret->keyword = copy_value(v->keyword);
-		if (ret->keyword->type == VAL_ERROR) return ret->keyword;
-		break;
-	case VAL_NIL:
-	case VAL_TRUE: break;
-	default:
-		return error(v->loc,
-		             "bug: unimplemented value copier for "
-		             "value of type `%s'",
-		             value_name[v->type]);
-	}
-
-	return ret;
-}
-
-struct value *
-print_value(FILE *f, struct value *v)
+struct value
+print_value(struct env *env, struct value v)
 {
 	kdgu *out = kdgu_news("");
-	char buf[64];
+	char buf[256];
 
-	switch (v->type) {
+	switch (v.type) {
 	case VAL_COMMA:
 		kdgu_chrappend(out, ',');
-		kdgu_append(out, print_value(f, v->keyword)->s);
+		/* TODO: Ensure print_value returns a string. */
+		kdgu_append(out, string(print_value(env, keyword(v))));
 		break;
-	case VAL_SYMBOL: out = kdgu_copy(v->s); break;
+	case VAL_SYMBOL: out = kdgu_copy(string(v)); break;
 	case VAL_STRING:
-		kdgu_append(out, v->s);
+		kdgu_chrappend(out, '"');
+		kdgu_append(out, string(v));
+		kdgu_chrappend(out, '"');
 		break;
 	case VAL_INT:
-		sprintf(buf, "%d", v->i);
+		sprintf(buf, "%d", v.integer);
 		out = kdgu_news(buf);
 		break;
 	case VAL_TRUE: out = kdgu_news("t");        break;
 	case VAL_NIL:  out = kdgu_news("()");       break;
 	case VAL_MACRO:
 	case VAL_FUNCTION:
-		//out = print_tree(f, v);
-		out = kdgu_news("TODO");
+		if (obj(v).name) {
+			kdgu *tmp = kdgu_copy(obj(v).name);
+			kdgu_uc(tmp);
+			kdgu_append(out, tmp);
+		} else
+			kdgu_append(out, &KDGU("anonymous function"));
 		break;
 	case VAL_BUILTIN:
-		sprintf(buf, "<builtin:%p>", v->prim);
+		sprintf(buf, "<builtin:%p>", obj(v).builtin);
 		out = kdgu_news(buf);
 		break;
 	case VAL_ARRAY:
-		for (unsigned i = 0; i < v->num; i++) {
-			struct value *e = print_value(f, v->arr[i]);
-			if (e->type == VAL_ERROR) return e;
-			assert(e->type == VAL_STRING);
-			kdgu_append(out, e->s);
+		for (unsigned i = 0; i < obj(v).num; i++) {
+			struct value e = print_value(env, array(v)[i]);
+			if (e.type == VAL_ERROR) return e;
+			assert(e.type == VAL_STRING);
+			kdgu_append(out, string(e));
 		}
 		break;
 	case VAL_KEYWORD:
-		sprintf(buf, "&%.*s", v->keyword->s->len, v->keyword->s->s);
+		sprintf(buf, "&%.*s",
+		        string(obj(v).keyword)->len, string(obj(v).keyword)->s);
 		out = kdgu_news(buf);
 		break;
 	case VAL_KEYWORDPARAM:
-		sprintf(buf, ":%.*s", v->keyword->s->len, v->keyword->s->s);
+		sprintf(buf, ":%.*s",
+		        string(obj(v).keyword)->len, string(obj(v).keyword)->s);
 		out = kdgu_news(buf);
 		break;
 	case VAL_CELL:
 		kdgu_chrappend(out, '(');
 
-		while (v->type == VAL_CELL) {
-			struct value *e = print_value(f, v->car);
-			if (e->type == VAL_ERROR) return e;
-			kdgu_append(out, e->s);
-			if (v->cdr->type == VAL_CELL) kdgu_chrappend(out, ' ');
-			v = v->cdr;
+		while (v.type == VAL_CELL) {
+			struct value e = print_value(env, car(v));
+			if (e.type == VAL_ERROR) return e;
+			kdgu_append(out, string(e));
+			if (cdr(v).type == VAL_CELL)
+				kdgu_chrappend(out, ' ');
+			v = cdr(v);
 		}
 
-		if (v->type != VAL_NIL) {
+		if (v.type != VAL_NIL) {
 			kdgu_chrappend(out, ' ');
-			kdgu_append(out, print_value(f, v)->s);
+			/*
+			 * TODO: This can break and probably other
+			 * things in this function too.
+			 */
+			kdgu_append(out, string(print_value(env, v)));
 		}
 
 		kdgu_chrappend(out, ')');
 		break;
+	case VAL_DOT:
+		kdgu_chrappend(out, '.');
+		break;
 	case VAL_ERROR:
-		kdgu_append(out, print_error(f, v)->s);
+		kdgu_append(out, string(print_error(env, v)));
+		break;
+	case VAL_NULL:
+		kdgu_append(out, &KDGU("NULL"));
 		break;
 	default:
-		return error(v->loc,
+		return error(env,
 		             "bug: unimplemented printer for"
 		             " expression of type `%s'",
-		             TYPE_NAME(v->type));
+		             TYPE_NAME(v.type));
 	}
 
-	struct value *e = new_value(v->loc);
-	e->type = VAL_STRING;
-	e->s = out;
+	struct value e = gc_alloc(env, VAL_STRING);
+	string(e) = out;
 
 	return e;
 }
 
-struct value *
-cons(struct value *car, struct value *cdr)
+struct value
+cons(struct env *env, struct value car, struct value cdr)
 {
-	struct value *v = new_value(car->loc);
-	v->type = VAL_CELL;
-	v->car = car;
-	v->cdr = cdr;
+	struct value v = gc_alloc(env, VAL_CELL);
+	car(v) = car;
+	cdr(v) = cdr;
 	return v;
 }
 
-struct value *
-acons(struct value *x, struct value *y, struct value *a)
+struct value
+acons(struct env *env, struct value x, struct value y, struct value a)
 {
-	return cons(cons(x, y), a);
+	return cons(env, cons(env, x, y), a);
 }
 
-struct value *
-make_symbol(struct location *loc, const char *s)
+struct value
+make_symbol(struct env *env, const char *s)
 {
-	if (!strcmp(s, "nil")) return Nil;
-	if (!strcmp(s, "t")) return True;
+	if (!strcmp(s, "nil")) return NIL;
+	if (!strcmp(s, "t")) return TRUE;
 
-	struct value *sym = new_value(loc);
-	sym->type = VAL_SYMBOL;
-	sym->s = kdgu_news(s);
+	struct value sym = gc_alloc(env, VAL_SYMBOL);
+	if (sym.type == VAL_NIL) return NIL;
+	string(sym) = kdgu_news(s);
+
 	return sym;
 }
 
-struct value *
-expand(struct value *env, struct value *v)
+struct value
+expand(struct env *env, struct value v)
 {
-	if (v->type != VAL_CELL || v->car->type != VAL_SYMBOL)
+	if (v.type != VAL_CELL || car(v).type != VAL_SYMBOL)
 		return v;
-	struct value *bind = find(env, v->car);
-	if (!bind || bind->cdr->type != VAL_MACRO) return v;
-	struct value *fn = bind->cdr;
-	struct value *args = v->cdr;
-	struct value *newenv = push_env(fn->env, fn->param, args);
 
-	for (struct value *opt = fn->optional;
-	     opt && opt->type != VAL_NIL;
-	     opt = opt->cdr) {
-		struct value *bind = find(newenv, opt->car->car);
-		if (!bind) add_variable(newenv, opt->car->car, opt->car->cdr);
-		else if (!bind->cdr) bind->cdr = opt->car->cdr;
+	struct value bind = find(env, car(v));
+
+	if (bind.type == VAL_NIL || cdr(bind).type != VAL_MACRO)
+		return v;
+
+	struct value fn = cdr(bind);
+	struct value args = cdr(v);
+
+	struct env *newenv = push_env(env, obj(fn).param, args);
+
+	for (struct value opt = obj(fn).optional;
+	     opt.type != VAL_NIL;
+	     opt = cdr(opt)) {
+		struct value bind = find(newenv, car(car(opt)));
+
+		if (bind.type == VAL_NIL)
+			add_variable(newenv,
+			             car(car(opt)),
+			             cdr(car(opt)));
+		else if (cdr(bind).type == VAL_NIL)
+			cdr(bind) = cdr(car(opt));
 	}
 
-	if (fn->rest) {
-		struct value *p = fn->param, *q = args;
-		while (p->type != VAL_NIL) {
-			p = p->cdr, q = q->cdr;
-			if (q->type == VAL_NIL) break;
+	if (obj(fn).rest.type == VAL_NIL) {
+		struct value p = obj(fn).param, q = args;
+
+		while (p.type != VAL_NIL) {
+			p = cdr(p), q = cdr(q);
+			if (q.type == VAL_NIL) break;
 		}
-		if (q->type != VAL_NIL)
-			add_variable(newenv, fn->rest, q);
-		else
-			add_variable(newenv, fn->rest, Nil);
+
+		add_variable(newenv, obj(fn).rest,
+		             q.type != VAL_NIL ? q : NIL);
 	}
 
-	return progn(newenv, fn->body);
+	return progn(newenv, obj(fn).body);
 }
 
 /*
@@ -265,173 +246,89 @@ expand(struct value *env, struct value *v)
  * the symbol could not be resolved.
  */
 
-struct value *
-find(struct value *env, struct value *sym)
+struct value
+find(struct env *env, struct value sym)
 {
-	assert(sym->type == VAL_SYMBOL);
+	/* Use this function carefully! */
+	assert(sym.type == VAL_SYMBOL);
 
 	/*
 	 * We've walked up through every scope and haven't found the
 	 * symbol. It must not exist.
 	 */
 
-	if (!env) return NULL;
+	if (!env) return NIL;
 
-	for (struct value *c = env->vars;
-	     c->type != VAL_NIL;
-	     c = c->cdr) {
-		struct value *bind = c->car;
-		if (kdgu_cmp(sym->s, bind->car->s, false, NULL))
+	for (struct value c = env->vars;
+	     c.type != VAL_NIL;
+	     c = cdr(c)) {
+		struct value bind = car(c);
+		if (kdgu_cmp(string(sym), string(car(bind)), false, NULL))
 			return bind;
 	}
 
 	return find(env->up, sym);
 }
 
-struct value *
-add_variable(struct value *env, struct value *sym, struct value *body)
+struct value
+add_variable(struct env *env, struct value sym, struct value body)
 {
-	env->vars = acons(sym, body, env->vars);
+	env->vars = acons(env, sym, body, env->vars);
 	return body;
 }
 
 void
-add_builtin(struct value *env, const char *name, builtin *f)
+add_builtin(struct env *env, const char *name, builtin *f)
 {
-	struct value *sym = make_symbol(BUILTIN, name);
-	struct value *prim = malloc(sizeof *prim);
-	prim->type = VAL_BUILTIN;
-	prim->prim = f;
+	struct value sym = make_symbol(env, name);
+	struct value prim = gc_alloc(env, VAL_BUILTIN);
+	if (prim.type == VAL_NIL) return;
+	obj(prim).builtin = f;
 	add_variable(env, sym, prim);
 }
 
-struct value *
-new_environment(void)
+struct env *
+new_environment(struct birch *b, const char *server)
 {
-	struct value *env = new_value(NOWHERE);
-	env->vars = Nil;
+	struct env *env = malloc(sizeof *env);
+	env->up = NULL;
+	env->birch = b;
+	env->vars = NIL;
+	env->server = strdup(server);
+	env->obj = malloc(GC_MAX_OBJECT * sizeof *env->obj);
+	memset(env->obj, 0, GC_MAX_OBJECT * sizeof *env->obj);
 	load_builtins(env);
 	return env;
 }
 
-struct value *
-make_env(struct value *vars, struct value *up)
+struct env *
+make_env(struct env *env, struct value vars)
 {
-	struct value *r = malloc(sizeof *r);
+	struct env *r = malloc(sizeof *r);
+
+	r->server = env->server;
+	r->birch = env->birch;
+	r->obj = env->obj;
+
 	r->vars = vars;
-	r->up = up;
+	r->up = env;
+
 	return r;
 }
 
-struct value *
-push_env(struct value *env, struct value *vars, struct value *values)
+struct env *
+push_env(struct env *env, struct value vars, struct value values)
 {
-	struct value *map = Nil;
-	struct value *p = vars, *q = values;
+	struct value map = NIL;
+	struct value p = vars, q = values;
 
 	for (;
-	     p->type == VAL_CELL;
-	     p = p->cdr, q = q->cdr) {
-		if (q->type == VAL_NIL) return make_env(map, env);
-		map = acons(p->car, q->car, map);
+	     p.type == VAL_CELL;
+	     p = cdr(p), q = cdr(q)) {
+		if (q.type == VAL_NIL) goto done;
+		map = acons(env, car(p), car(q), map);
 	}
 
-	return make_env(map, env);
-}
-
-#define p(...) fprintf(f, __VA_ARGS__)
-
-void
-print_tree(FILE *f, struct value *v)
-{
-	static int depth = 0;
-	static int l = 0, arm[2048] = {0};
-	depth++, (depth != 1 && p("\n")), arm[l] = 0;
-
-	for (int i = 0; i < l - 1; i++)
-		arm[i] ? p("│   ") : p("    ");
-	if (l) arm[l - 1] ? p("├───") : p("╰───");
-
-	if (!v) {
-		p("(null)");
-		return;
-	}
-
-	switch (v->type) {
-	case VAL_BUILTIN:
-		p("(builtin:%p)", v->prim);
-		break;
-	case VAL_FUNCTION:
-		p("(function)");
-		l++;
-		arm[l - 1] = 1;
-		print_tree(f, v->param);
-		print_tree(f, v->optional);
-		arm[l - 1] = 0;
-		print_tree(f, v->body);
-		l--;
-		break;
-	case VAL_SYMBOL:
-		p("(symbol:%.*s)", v->s->len, v->s->s);
-		break;
-	case VAL_CELL:
-		p("(cell)");
-		l++;
-		arm[l - 1] = 1;
-		print_tree(f, v->car);
-		arm[l - 1] = 0;
-		print_tree(f, v->cdr);
-		l--;
-		break;
-	case VAL_STRING:
-		p("\"%.*s\"", v->s->len, v->s->s);
-		break;
-	case VAL_INT:
-		p("(int:%d)", v->i);
-		break;
-	case VAL_NIL:
-		p("()");
-		break;
-	case VAL_TRUE:
-		p("(true)");
-		break;
-	case VAL_ARRAY:
-		p("[");
-		for (unsigned i = 0; i < v->num; i++)
-			print_tree(f, v->arr[i]);
-		p("]");
-		break;
-	case VAL_KEYWORD:
-		p("(keyword %.*s)", v->keyword->s->len, v->keyword->s->s);
-		break;
-	case VAL_ERROR:
-		p("(error)");
-		break;
-	case VAL_COMMA:
-		p("(,)");
-		l++;
-		arm[l - 1] = 0;
-		print_tree(f, v->keyword);
-		l--;
-		break;
-	case VAL_COMMAT:
-		p("(,@)");
-		l++;
-		arm[l - 1] = 0;
-		print_tree(f, v->keyword);
-		l--;
-		break;
-	case VAL_KEYWORDPARAM:
-		p("(:)");
-		l++;
-		arm[l - 1] = 0;
-		print_tree(f, v->keyword);
-		l--;
-		break;
-	default:
-		p("(bug: unprintable value type %d)\n", v->type);
-		exit(1);
-	}
-
-	depth--;
+ done:
+	return make_env(env, map);
 }

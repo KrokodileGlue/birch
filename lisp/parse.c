@@ -1,16 +1,19 @@
 #include <stdlib.h>
 #include <string.h>
+#include <kdg/kdgu.h>
 
+#include "lex.h"
+#include "lisp.h"
 #include "error.h"
 #include "parse.h"
-#include "lex.h"
 #include "eval.h"
+#include "gc.h"
 
-static struct value *
-parse_expr(struct value *env, struct lexer *l)
+static struct value
+parse_expr(struct env *env, struct lexer *l)
 {
-	struct token *t = tok(l, CODE);
-	if (!t) return NULL;
+	struct token *t = tok(l);
+	if (!t) return VNULL;
 
 	/*
 	 * The cast to int is here to suppress the `case value 'x' not
@@ -19,114 +22,108 @@ parse_expr(struct value *env, struct lexer *l)
 
 	switch ((int)t->type) {
 	case '(':  return parse(env, l);
-	case ')':  return RParen;
-	case '.':  return Dot;
-	case '\'': return quote(parse_expr(env, l));
-	case '`':  return backtick(parse_expr(env, l));
+	case ')':  return RPAREN;
+	case '.':  return DOT;
+	case '\'': return quote(env, parse_expr(env, l));
+	case '`':  return backtick(env, parse_expr(env, l));
 
 	case ',': {
-		struct value *v = new_value(&t->loc);
+		struct value v = gc_alloc(env, l->s[l->idx] == '@'
+		                          ? VAL_COMMAT : VAL_COMMA);
 
-		if (l->s[l->loc.idx] == '@') {
-			l->loc.idx++;
-			v->type = VAL_COMMAT;
-			v->keyword = parse_expr(env, l);
+		if (l->s[l->idx] == '@') {
+			l->idx++;
+			v.type = VAL_COMMAT;
+			keyword(v) = parse_expr(env, l);
 		} else {
-			v->type = VAL_COMMA;
-			v->keyword = parse_expr(env, l);
+			v.type = VAL_COMMA;
+			keyword(v) = parse_expr(env, l);
 		}
+
 		return v;
 	} break;
 
 	/* Array. */
 	case '[': {
-		struct value *v = new_value(&t->loc);
-		v->type = VAL_ARRAY;
-		struct value *arr[512];
+		struct value v = gc_alloc(env, VAL_ARRAY);
+
+		/* TODO: Hrm, this is incredibly dumb. */
+		struct value arr[512];
 		unsigned num = 0;
 
-		while ((t = tok(l, CODE)) && t->type != ']') {
-			l->loc = t->loc;
+		while ((t = tok(l)) && t->type != ']')
 			arr[num++] = parse_expr(env, l);
-		}
 
-		v->arr = malloc(num * sizeof *v->arr);
-		memcpy(v->arr, arr, num * sizeof *v->arr);
-		v->num = num;
+		array(v) = malloc(num * sizeof v);
+		memcpy(array(v), arr, num * sizeof v);
+		obj(v).num = num;
+
 		return v;
 	} break;
 
 	/* Keyword. */
 	case '&': {
-		struct value *v = new_value(&t->loc);
-		v->type = VAL_KEYWORD;
-		v->keyword = parse_expr(env, l);
-		if (v->keyword->type != VAL_SYMBOL)
-			return error(v->loc, "expected a symbol");
+		struct value v = gc_alloc(env, VAL_KEYWORD);
+		keyword(v) = parse_expr(env, l);
+		if (keyword(v).type != VAL_SYMBOL)
+			return error(env, "expected a symbol");
 		return v;
 	} break;
 
 	/* Keyword parameter. */
 	case ':': {
-		struct value *v = new_value(&t->loc);
-		v->type = VAL_KEYWORDPARAM;
-		v->keyword = parse_expr(env, l);
-		if (v->keyword->type != VAL_SYMBOL)
-			return error(v->loc, "expected a symbol");
+		struct value v = gc_alloc(env, VAL_KEYWORDPARAM);
+		keyword(v) = parse_expr(env, l);
+		if (keyword(v).type != VAL_SYMBOL)
+			return error(env, "expected a symbol");
 		return v;
 	} break;
 
 	case TOK_IDENT:
-		return make_symbol(copy_location(t->loc), t->body);
+		return make_symbol(env, t->body);
 
 	case TOK_STR: {
-		struct value *v = new_value(&t->loc);
-		v->type = VAL_STRING;
-		v->s = kdgu_copy(t->s);
+		struct value v = gc_alloc(env, VAL_STRING);
+		string(v) = kdgu_copy(t->s);
 		return v;
 	} break;
 
-	case TOK_INT: {
-		struct value *v = new_value(&t->loc);
-		v->type = VAL_INT;
-		v->i = t->i;
-		return v;
-	} break;
+	case TOK_INT: return (struct value){VAL_INT, {t->i}};
 
 	default:
-		return error(&t->loc, "unexpected `%s'", t->body);
+		return error(env, "unexpected `%s'", t->body);
 	}
 
-	return NULL;
+	return VNULL;
 }
 
-struct value *
-parse(struct value *env, struct lexer *l)
+struct value
+parse(struct env *env, struct lexer *l)
 {
-	struct value *head = Nil, *tail = head;
+	struct value head = NIL, tail = head;
 
 	for (;;) {
-		struct location *loc = copy_location(l->loc);
-		struct value *o = parse_expr(env, l);
-		if (!o) return error(loc, "unmatched `('");
-		free(loc);
-		if (o == RParen) return head;
+		struct value o = parse_expr(env, l);
 
-		if (o == Dot) {
-			tail->cdr = parse_expr(env, l);
-			if (parse_expr(env, l) != RParen)
-				return error(copy_location(l->loc),
-				             "expected `)'");
+		if (o.type == VAL_NULL)
+			return error(env, "unmatched `('");
+
+		if (o.type == VAL_RPAREN) return head;
+
+		if (o.type == VAL_DOT) {
+			cdr(tail) = parse_expr(env, l);
+			if (parse_expr(env, l).type != VAL_RPAREN)
+				return error(env, "expected `)'");
 			return head;
 		}
 
-		if (head->type == VAL_NIL) {
-			head = cons(o, Nil);
+		if (head.type == VAL_NIL) {
+			head = cons(env, o, NIL);
 			tail = head;
 			continue;
 		}
 
-		tail->cdr = cons(o, Nil);
-		tail = tail->cdr;
+		cdr(tail) = cons(env, o, NIL);
+		tail = cdr(tail);
 	}
 }

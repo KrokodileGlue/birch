@@ -3,9 +3,11 @@
 #include <string.h>
 #include <assert.h>
 #include <stdarg.h>
+#include <stdbool.h>
+#include <stdint.h>
 
-#include "registry.h"
 #include "table.h"
+#include "registry.h"
 
 static void
 reg_set_tree(struct tree reg, const char *key, struct tree val)
@@ -13,7 +15,8 @@ reg_set_tree(struct tree reg, const char *key, struct tree val)
 	char *tok[64] = {0}, *tmp = strdup(key), *t = NULL;
 	unsigned len = 0;
 
-	while ((t = strtok(t ? NULL : tmp, "."))) tok[len++] = strdup(t);
+	while ((t = strtok(t ? NULL : tmp, ".")))
+		tok[len++] = strdup(t);
 
 	struct table *table = reg.table;
 
@@ -74,7 +77,7 @@ reg_get(struct tree reg, const char *fmt, ...)
 
 	for (unsigned i = 0; i < len - 1; i++) {
 		struct tree t = table_lookup(table, tok[i]);
-		if (t.type != TREE_TABLE) return NIL;
+		if (t.type != TREE_TABLE) return REG_NIL;
 		table = t.table;
 	}
 

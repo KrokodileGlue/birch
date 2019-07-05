@@ -1,5 +1,3 @@
-#pragma once
-
 struct net *net_open(const char *name, int port);
 void net_close(struct net *n);
 
