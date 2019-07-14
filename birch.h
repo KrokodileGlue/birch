@@ -15,6 +15,10 @@ void birch_join(struct birch *b);
 void birch(struct birch *b);
 
 /* Public API kinda stuff. */
+void birch_paste(struct birch *b,
+                 const char *server,
+                 const char *chan,
+                 const char *buf);
 void birch_send(struct birch *b,
                 const char *server,
                 const char *chan,

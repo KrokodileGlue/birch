@@ -7,9 +7,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "table.h"
 #include "registry.h"
-#include "list.h"
 #include "server.h"
 #include "net.h"
 

@@ -218,11 +218,12 @@ send_value(struct birch *b,
            struct value v)
 {
 	if (b->env->output->len) {
-		char buf[256];
+		char *buf = malloc(b->env->output->len + 1);
 		memcpy(buf, b->env->output->s, b->env->output->len);
 		buf[b->env->output->len] = 0;
 		birch_send(b, server, channel, "%s", buf);
 		kdgu_free(b->env->output);
+		free(buf);
 		/* TODO: Check malloc everywhere. */
 		b->env->output = kdgu_news("");
 		return;
@@ -239,10 +240,11 @@ send_value(struct birch *b,
 	/* TODO: Think about when this can happen. */
 	if (!thing || !thing->s) return;
 
-	char buf[256];
+	char *buf = malloc(thing->len + 1);
 	memcpy(buf, thing->s, thing->len);
 	buf[thing->len] = 0;
 	birch_send(b, server, channel, "%s", buf);
+	free(buf);
 }
 
 void
