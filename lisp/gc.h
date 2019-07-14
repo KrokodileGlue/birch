@@ -54,7 +54,7 @@ struct object {
 #define name(X) (env->obj[(X).obj].name)
 #define docstring(X) (env->obj[(X).obj].docstring)
 
-#define GC_MAX_OBJECT 2048
+#define GC_MAX_OBJECT 10000
 
 struct value gc_alloc(struct env *env, enum value_type type);
 struct value gc_copy(struct env *env, struct value v);

@@ -14,24 +14,27 @@
 #include "lisp/util.h"
 #include "lisp/parse.h"
 #include "lisp/eval.h"
-
 #include "lisp/gc.h"
+
 #include "table.h"
 #include "registry.h"
 #include "list.h"
-
 #include "server.h"
 #include "net.h"
 #include "irc.h"
+#include "lisp.h"
 
 #include "birch.h"
-#include "lisp.h"
 
 struct birch *
 birch_new(struct tree reg)
 {
 	struct birch *b = malloc(sizeof *b);
-	return memset(b, 0, sizeof *b), b->reg = reg, b;
+	memset(b, 0, sizeof *b);
+	b->reg = reg;
+	b->env = new_environment(b, "global");
+	lisp_init(b);
+	return b;
 }
 
 void
@@ -113,6 +116,8 @@ birch_send(struct birch *b,
            const char *fmt,
            ...)
 {
+	if (!strcmp(server, "global")) return;
+
 	char buf[256];
 
 	va_list args;
@@ -120,7 +125,11 @@ birch_send(struct birch *b,
 	vsnprintf(buf, sizeof buf, fmt, args);
 	va_end(args);
 
-	char bug[256];
+	for (size_t i = 0; i < strlen(buf); i++)
+		if (buf[i] == '\n')
+			buf[i] = ' ';
+
+	char bug[512];
 	sprintf(bug, "PRIVMSG %s :%s\r\n", chan, buf);
 
 	net_send(((struct server *)list_get(b->server, (void *)server, server_cmp))->net, bug);

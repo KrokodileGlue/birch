@@ -5,8 +5,6 @@
 
 #include "irc.h"
 
-static const char *type_str[] = { "reply", "cmd" };
-
 static const char *cmd_str[] = {
 	"PASS",
 	"NICK",

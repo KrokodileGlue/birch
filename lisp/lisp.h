@@ -1,5 +1,8 @@
 struct value {
 	enum value_type {
+		VAL_NULL,
+		VAL_NIL,
+
 		VAL_INT,
 		VAL_CELL,
 		VAL_STRING,
@@ -16,12 +19,10 @@ struct value {
 
 		/* Non-GC values. */
 		VAL_TRUE,
-		VAL_NIL,
 
 		/* Dummies only used by the parser. */
 		VAL_RPAREN,
 		VAL_DOT,
-		VAL_NULL,
 
 		/* Hot potatoes. */
 		VAL_ERROR,
@@ -45,11 +46,18 @@ struct env {
 
 	/*
 	 * The name of the server this environment is associated with
-	 * as it appears in the registry.
+	 * as it appears in the registry, or `global`.
 	 */
 	char *server;
+
 	struct birch *birch;
 	struct object *obj;
+
+	/*
+	 * The accumulation of the output of all print statements
+	 * evaluated during the processing of a command.
+	 */
+	kdgu *output;
 };
 
 typedef struct value builtin(struct env *, struct value);
@@ -68,7 +76,7 @@ struct env *new_environment(struct birch *b, const char *server);
 struct env *push_env(struct env *env,
                      struct value vars,
                      struct value values);
-struct env *make_env(struct env *env, struct value vars);
+struct env *make_env(struct env *env, struct value map);
 void value_free(struct value v);
 
 struct value cons(struct env *env,

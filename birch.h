@@ -4,6 +4,9 @@ struct birch {
 
 	/* Low-level server objects. */
 	struct list *server;
+
+	/* The global Lisp environment. */
+	struct env *env;
 };
 
 struct birch *birch_new(struct tree reg);

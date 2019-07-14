@@ -9,6 +9,12 @@
 #include "table.h"
 #include "registry.h"
 
+struct tree
+reg_new(void)
+{
+	return (struct tree){TREE_TABLE, .table = table_new()};
+}
+
 static void
 reg_set_tree(struct tree reg, const char *key, struct tree val)
 {
@@ -98,12 +104,16 @@ void
 reg_print(struct tree reg, int depth)
 {
 	if (reg.type != TREE_TABLE)
-		for (int i = 0; i < depth; i++) printf("    ");
+		for (int i = 0; i < depth; i++)
+			printf("    ");
+
 	switch (reg.type) {
 	case TREE_NIL: printf("nil\n"); break;
 	case TREE_TABLE: print_table(reg.table, depth + 1); break;
 	case TREE_STRING: printf("string %s\n", reg.string); break;
 	case TREE_INT: printf("integer %d\n", reg.integer); break;
-	case TREE_BOOL: printf("boolean %s\n", reg.boolean ? "true" : "false"); break;
+	case TREE_BOOL: printf("boolean %s\n", reg.boolean
+	                       ? "true" : "false");
+		break;
 	}
 }

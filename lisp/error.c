@@ -23,7 +23,7 @@ error(struct env *env, const char *fmt, ...)
 	va_start(args, fmt);
 
 	/* TODO: Check the return value. */
-	vsnprintf(buf, 128, fmt, args) + 1;
+	vsnprintf(buf, 128, fmt, args);
 	va_end(args);
 
 	string(v) = kdgu_news(buf);

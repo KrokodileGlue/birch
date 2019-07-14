@@ -1,7 +1,12 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <assert.h>
+
 #include <kdg/kdgu.h>
+
+#include "../registry.h"
+#include "../birch.h"
+#include "../util.h"
 
 #include "lex.h"
 #include "lisp.h"
@@ -46,6 +51,7 @@ make_function(struct env *env, struct value v, enum value_type type)
 
 	optional(r) = NIL;
 	key(r) = NIL;
+	rest(r) = NIL;
 
 	if (!IS_LIST(car(v)))
 		return error(env, "expected parameter list here");
@@ -200,6 +206,8 @@ builtin_print(struct env *env, struct value v)
 		if (e.type == VAL_ERROR) return e;
 		kdgu_append(out, string(e));
 	}
+
+	kdgu_append(env->birch->env->output, out);
 
 	struct value e = gc_alloc(env, VAL_STRING);
 	string(e) = out;

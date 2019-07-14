@@ -10,7 +10,8 @@
 #include "registry.h"
 #include "birch.h"
 
-int main(void)
+int
+main(void)
 {
 	struct tree reg = reg_new();
 

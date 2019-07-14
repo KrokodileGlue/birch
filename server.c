@@ -39,3 +39,9 @@ server_join(struct server *s, const char *chan)
 {
 	net_send(s->net, "JOIN %s\r\n", chan);
 }
+
+bool
+server_cmp(void *a, void *b)
+{
+	return !strcmp(((struct server *)a)->name, b);
+}

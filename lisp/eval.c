@@ -120,7 +120,7 @@ apply(struct env *env,
 			cdr(bind) = cdr(car(key));
 	}
 
-	if (obj(fn).rest.type == VAL_NIL) {
+	if (rest(fn).type != VAL_NIL) {
 		struct value p = obj(fn).param, q = args;
 
 		while (p.type != VAL_NIL) {
@@ -160,10 +160,11 @@ eval_list(struct env *env, struct value list)
 	for (struct value l = list;
 	     l.type != VAL_NIL;
 	     l = cdr(l)) {
+		/* TODO: WTF is this? */
 		if (!IS_LIST(l) || !IS_LIST(cdr(l)))
 			return list_length(env, l);
 		struct value tmp = eval(env, car(l));
-		if (tmp.type == VAL_NIL) return NIL;
+		if (tmp.type == VAL_NULL) return VNULL;
 		if (tmp.type == VAL_ERROR) return tmp;
 		if (head.type == VAL_NIL) {
 			head = tail = cons(env, tmp, NIL);

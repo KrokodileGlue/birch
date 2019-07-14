@@ -24,9 +24,4 @@ void reg_set_int(struct tree reg, const char *key, int val);
 void reg_set_bool(struct tree reg, const char *key, bool val);
 struct tree reg_get(struct tree reg, const char *fmt, ...);
 void reg_print(struct tree reg, int depth);
-
-static struct tree
-reg_new(void)
-{
-	return (struct tree){TREE_TABLE, .table = table_new()};
-}
+struct tree reg_new(void);

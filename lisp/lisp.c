@@ -14,8 +14,11 @@
 #include "../table.h"
 #include "../registry.h"
 #include "../birch.h"
+#include "../util.h"
 
 const char **value_name = (const char *[]){
+	"null",
+	"nil",
 	"int",
 	"cell",
 	"string",
@@ -30,10 +33,8 @@ const char **value_name = (const char *[]){
 	"comma",
 	"commat",
 	"true",
-	"nil",
 	"rparen",
 	"dot",
-	"null",
 	"error",
 	"note",
 };
@@ -102,8 +103,7 @@ print_value(struct env *env, struct value v)
 			kdgu_append(out, &KDGU("anonymous function"));
 		break;
 	case VAL_BUILTIN:
-		sprintf(buf, "<builtin:%p>", obj(v).builtin);
-		out = kdgu_news(buf);
+		out = kdgu_news("<builtin>");
 		break;
 	case VAL_ARRAY:
 		for (unsigned i = 0; i < obj(v).num; i++) {
@@ -153,7 +153,7 @@ print_value(struct env *env, struct value v)
 		kdgu_append(out, string(print_error(env, v)));
 		break;
 	case VAL_NULL:
-		kdgu_append(out, &KDGU("NULL"));
+		kdgu_append(out, &KDGU("null"));
 		break;
 	default:
 		return error(env,
@@ -225,7 +225,7 @@ expand(struct env *env, struct value v)
 			cdr(bind) = cdr(car(opt));
 	}
 
-	if (obj(fn).rest.type == VAL_NIL) {
+	if (rest(fn).type != VAL_NIL) {
 		struct value p = obj(fn).param, q = args;
 
 		while (p.type != VAL_NIL) {
@@ -273,6 +273,7 @@ find(struct env *env, struct value sym)
 struct value
 add_variable(struct env *env, struct value sym, struct value body)
 {
+	assert(sym.type == VAL_SYMBOL);
 	env->vars = acons(env, sym, body, env->vars);
 	return body;
 }
@@ -287,6 +288,11 @@ add_builtin(struct env *env, const char *name, builtin *f)
 	add_variable(env, sym, prim);
 }
 
+/*
+ * This should only ever be called to construct the global
+ * environment. All others should be constructed with `push_env` using
+ * the global environment as the first parameter.
+ */
 struct env *
 new_environment(struct birch *b, const char *server)
 {
@@ -295,6 +301,7 @@ new_environment(struct birch *b, const char *server)
 	env->birch = b;
 	env->vars = NIL;
 	env->server = strdup(server);
+	env->output = kdgu_news("");
 	env->obj = malloc(GC_MAX_OBJECT * sizeof *env->obj);
 	memset(env->obj, 0, GC_MAX_OBJECT * sizeof *env->obj);
 	load_builtins(env);
@@ -302,16 +309,16 @@ new_environment(struct birch *b, const char *server)
 }
 
 struct env *
-make_env(struct env *env, struct value vars)
+make_env(struct env *env, struct value map)
 {
 	struct env *r = malloc(sizeof *r);
 
 	r->server = env->server;
 	r->birch = env->birch;
 	r->obj = env->obj;
-
-	r->vars = vars;
+	r->vars = map;
 	r->up = env;
+	r->output = NULL;
 
 	return r;
 }
@@ -319,16 +326,12 @@ make_env(struct env *env, struct value vars)
 struct env *
 push_env(struct env *env, struct value vars, struct value values)
 {
-	struct value map = NIL;
-	struct value p = vars, q = values;
+	struct value map = NIL, p = vars, q = values;
 
-	for (;
-	     p.type == VAL_CELL;
-	     p = cdr(p), q = cdr(q)) {
-		if (q.type == VAL_NIL) goto done;
+	while (p.type == VAL_CELL && q.type == VAL_CELL) {
 		map = acons(env, car(p), car(q), map);
+		p = cdr(p), q = cdr(q);
 	}
 
- done:
 	return make_env(env, map);
 }

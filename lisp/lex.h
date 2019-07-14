@@ -17,7 +17,7 @@ struct token {
 	} type;
 
 	char *body;            /* Region of input this is from.     */
-	int line, column, idx, len;
+	unsigned line, column, idx, len;
 
 	/*
 	 * Identifiers don't have their own data field because their
@@ -34,8 +34,8 @@ struct lexer {
 	const char *file;      /* Filename.                         */
 	const char *s;         /* Input stream.                     */
 	const char *e;         /* End of input stream.              */
-	int idx;               /* Current character.                */
-	int len, line, column;
+	unsigned idx;          /* Current character.                */
+	unsigned len, line, column;
 };
 
 struct lexer *new_lexer(const char *file, const char *s);

@@ -35,6 +35,7 @@ gc_copy(struct env *env, struct value v)
 
 	switch (v.type) {
 	case VAL_COMMA:
+	case VAL_COMMAT:
 		keyword(ret) = gc_copy(env, keyword(v));
 		break;
 	case VAL_SYMBOL:
