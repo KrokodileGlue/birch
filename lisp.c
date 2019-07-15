@@ -247,6 +247,23 @@ send_value(struct birch *b,
 	free(buf);
 }
 
+static void
+do_msg_hook(struct birch *b, struct env *env, struct line *l)
+{
+	struct value bind = find(env, make_symbol(env, "msg-hook"));
+	if (bind.type == VAL_NIL) return;
+
+	for (struct value msg_hook = cdr(bind);
+	     msg_hook.type != VAL_NIL;
+	     msg_hook = cdr(msg_hook)) {
+		struct value hook = car(msg_hook);
+		struct value arg = gc_alloc(env, VAL_STRING);
+		string(arg) = kdgu_news(l->trailing);
+		struct value call = cons(env, hook, cons(env, arg, NIL));
+		eval(env, call);
+	}
+}
+
 void
 lisp_interpret_line(struct birch *b,
                     const char *server,
@@ -254,6 +271,7 @@ lisp_interpret_line(struct birch *b,
 {
 	char *text = NULL;
 
+	/* TODO: Do triggers. */
 	if (!strncmp(l->trailing, ".(", 2)) {
 		text = strdup(l->trailing + 2);
 	} else if (*l->trailing == '.') {
@@ -262,6 +280,7 @@ lisp_interpret_line(struct birch *b,
 		text[strlen(text) + 1] = 0;
 		text[strlen(text)] = ')';
 	} else {
+		do_msg_hook(b, get_env(b, server, l->middle[0]), l);
 		return;
 	}
 

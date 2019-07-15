@@ -4,7 +4,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <dlfcn.h>
+#include <pthread.h>
 
 #include <kdg/kdgu.h>
 #include <curl/curl.h>
@@ -71,10 +71,16 @@ birch_join(struct birch *b)
 		join(b, KEY, list_get(b->server, KEY, server_cmp));
 }
 
-static void
-birch_main(struct birch *b, struct server *server)
+struct data {
+	struct birch *b;
+	struct server *server;
+};
+
+static void *
+birch_main(void *data)
 {
-	curl_global_init(CURL_GLOBAL_ALL);
+	struct birch *b = ((struct data *)data)->b;
+	struct server *server = ((struct data *)data)->server;
 
 	while (1) {
 		char buf[512];
@@ -93,8 +99,7 @@ birch_main(struct birch *b, struct server *server)
 		lisp_interpret_line(b, server->name, line);
 	}
 
-	curl_global_cleanup();
-	exit(0);
+	return NULL;
 }
 
 /*
@@ -103,16 +108,25 @@ birch_main(struct birch *b, struct server *server)
 void
 birch(struct birch *b)
 {
+	curl_global_init(CURL_GLOBAL_ALL);
 	struct list *l = b->server;
+
+	int idx = 0;
+	pthread_t thread[10];   /* TODO: This hardcoded maximum. */
 
 	/* Walk along the list of servers starting listen threads. */
 	while (l) {
-		struct server *server = (struct server *)l->data;
-		if (fork() == 0) birch_main(b, server);
+		struct data *data = malloc(sizeof *data);
+		*data = (struct data){b, l->data};
+		pthread_create(&thread[idx], NULL, birch_main, data);
+		idx++;
 		l = l->next;
 	}
 
-	/* Only the main thread should reach here. */
+	for (int i = 0; i < idx; i++)
+		pthread_join(thread[i], NULL);
+
+	curl_global_cleanup();
 }
 
 static size_t
@@ -194,6 +208,7 @@ birch_send(struct birch *b,
 			birch_send(b, server, chan,
 			           "Output was too long.");
 			free(buf);
+			return;
 		}
 
 		/* TODO: Check realloc and stuff. */

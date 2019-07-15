@@ -109,8 +109,8 @@ struct line *line_new(const char *a)
 		char *mid = malloc(b - a + 1);
 		strncpy(mid, a, b - a);
 		mid[b - a] = 0, a = b;
-		l->middle = realloc(l->middle, ++l->num_middle
-		                    * sizeof *l->middle);
+		l->middle = realloc(l->middle,
+		                    ++l->num_middle * sizeof *l->middle);
 		l->middle[l->num_middle - 1] = mid;
 	}
 

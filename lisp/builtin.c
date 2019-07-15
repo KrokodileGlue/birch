@@ -387,9 +387,9 @@ builtin_cons(struct env *env, struct value v)
 {
 	struct value a = eval(env, car(v)),
 		b = eval(env, car(cdr(v)));
-	if (a.type == VAL_NIL) return NIL;
+	if (a.type == VAL_NULL) return VNULL;
 	if (a.type == VAL_ERROR) return a;
-	if (b.type == VAL_NIL) return NIL;
+	if (b.type == VAL_NULL) return VNULL;
 	if (b.type == VAL_ERROR) return b;
 	return cons(env, a, b);
 }

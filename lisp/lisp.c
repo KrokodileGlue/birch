@@ -158,8 +158,8 @@ print_value(struct env *env, struct value v)
 	default:
 		return error(env,
 		             "bug: unimplemented printer for"
-		             " expression of type `%s'",
-		             TYPE_NAME(v.type));
+		             " expression of type `%s' (%d)",
+		             TYPE_NAME(v.type), v.type);
 	}
 
 	struct value e = gc_alloc(env, VAL_STRING);
@@ -190,7 +190,7 @@ make_symbol(struct env *env, const char *s)
 	if (!strcmp(s, "t")) return TRUE;
 
 	struct value sym = gc_alloc(env, VAL_SYMBOL);
-	if (sym.type == VAL_NIL) return NIL;
+	if (sym.type == VAL_NULL) return VNULL;
 	string(sym) = kdgu_news(s);
 
 	return sym;
