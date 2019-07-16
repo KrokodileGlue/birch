@@ -33,7 +33,7 @@ birch_new(struct tree reg)
 	struct birch *b = malloc(sizeof *b);
 	memset(b, 0, sizeof *b);
 	b->reg = reg;
-	b->env = new_environment(b, "global");
+	b->env = new_environment(b, "global", "global");
 	lisp_init(b);
 	return b;
 }
@@ -105,6 +105,7 @@ birch_main(void *data)
 /*
  * Begins listener threads and launches the main I/O loops.
  */
+
 void
 birch(struct birch *b)
 {
@@ -242,4 +243,41 @@ birch_send(struct birch *b,
 	}
 
 	net_send(((struct server *)list_get(b->server, (void *)server, server_cmp))->net, "%s", bug);
+}
+
+/*
+ * Gets the Lisp environment for a specific channel, or the global
+ * environment.
+ */
+
+struct env *
+birch_get_env(struct birch *b, const char *server, const char *channel)
+{
+	if (!strcmp(channel, "global")) return b->env;
+
+	struct channel {
+		const char *server, *channel;
+	};
+
+	bool cmp(struct env *a, struct channel *b) {
+		return !strcmp(a->server, b->server)
+			&& !strcmp(a->channel, b->channel);
+	}
+
+	struct env *env = list_get(b->channel,
+	                           &(struct channel){server, channel},
+	                           (bool (*)(void *, void *))cmp);
+
+	/*
+	 * If the environment exists, fine. If it doesn't, a new one
+	 * must be constructed for this channel.
+	 */
+	if (env) return env;
+
+	env = push_env(b->env, NIL, NIL);
+	env->server = strdup(server);
+	env->channel = strdup(channel);
+	list_add(&b->channel, env);
+
+	return env;
 }

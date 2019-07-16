@@ -45,52 +45,80 @@ struct env {
 	struct env *up;
 
 	/*
-	 * The name of the server this environment is associated with
-	 * as it appears in the registry, or `global`.
+	 * The names of the server and channel this environment is
+	 * associated with as they appears in the registry, or both
+	 * are `global`.
 	 */
-	char *server;
+	char *server, *channel;
 
 	struct birch *birch;
 	struct object *obj;
 
 	/*
 	 * The accumulation of the output of all print statements
-	 * evaluated during the processing of a command.
+	 * evaluated so far. This is reset in `../builtin.c` after
+	 * each command is executed.
 	 */
 	kdgu *output;
 };
 
-typedef struct value builtin(struct env *, struct value);
+struct env *new_environment(struct birch *b,
+                            const char *server,
+                            const char *channel);
 
-struct value list_length(struct env *env, struct value list);
-
-struct value quote(struct env *env, struct value v);
-struct value backtick(struct env *env, struct value v);
-struct value add_variable(struct env *env,
-                          struct value sym,
-                          struct value body);
-void add_builtin(struct env *env, const char *name, builtin *f);
-struct value find(struct env *env, struct value sym);
-
-struct env *new_environment(struct birch *b, const char *server);
 struct env *push_env(struct env *env,
                      struct value vars,
                      struct value values);
-struct env *make_env(struct env *env, struct value map);
+
+struct env *make_env(struct env *env,
+                     struct value map);
+
+typedef struct value builtin(struct env *, struct value);
+
+struct value list_length(struct env *env,
+                         struct value list);
+
+struct value quote(struct env *env,
+                   struct value v);
+
+struct value backtick(struct env *env,
+                      struct value v);
+
+struct value add_variable(struct env *env,
+                          struct value sym,
+                          struct value body);
+
+void add_builtin(struct env *env,
+                 const char *name,
+                 builtin *f);
+
+struct value find(struct env *env,
+                  struct value sym);
+
 void value_free(struct value v);
 
 struct value cons(struct env *env,
                   struct value car,
                   struct value cdr);
+
 struct value acons(struct env *env,
                    struct value x,
                    struct value y,
                    struct value a);
-struct value make_symbol(struct env *env, const char *s);
-struct value expand(struct env *env, struct value v);
 
-struct value print_value(struct env *env, struct value v);
+struct value make_symbol(struct env *env,
+                         const char *s);
 
+struct value expand(struct env *env,
+                    struct value v);
+
+struct value print_value(struct env *env,
+                         struct value v);
+
+/*
+ * A global array mapping each type (as an integer index into the
+ * array) to a string representing it.
+ */
 const char **value_name;
 
 #define DOT (struct value){VAL_DOT,{0}}

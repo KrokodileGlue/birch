@@ -293,18 +293,34 @@ add_builtin(struct env *env, const char *name, builtin *f)
  * environment. All others should be constructed with `push_env` using
  * the global environment as the first parameter.
  */
+
 struct env *
-new_environment(struct birch *b, const char *server)
+new_environment(struct birch *b,
+                const char *server,
+                const char *channel)
 {
 	struct env *env = malloc(sizeof *env);
-	env->up = NULL;
+
+	/* Initialize basic fields. */
+	env->up = NULL;    /* The global environment has no parent. */
 	env->birch = b;
 	env->vars = NIL;
 	env->server = strdup(server);
+	env->server = strdup(channel);
 	env->output = kdgu_news("");
+
+	/* Initialize garbage-collected objects. */
 	env->obj = malloc(GC_MAX_OBJECT * sizeof *env->obj);
 	memset(env->obj, 0, GC_MAX_OBJECT * sizeof *env->obj);
+
+	/*
+	 * Note: This should only be done here (in the initialization
+	 * for the global environment) because it's redundant to load
+	 * the same builtins when they're accessible to all channels
+	 * through the global environment.
+	 */
 	load_builtins(env);
+
 	return env;
 }
 
@@ -314,6 +330,7 @@ make_env(struct env *env, struct value map)
 	struct env *r = malloc(sizeof *r);
 
 	r->server = env->server;
+	r->channel = env->channel;
 	r->birch = env->birch;
 	r->obj = env->obj;
 	r->vars = map;

@@ -40,7 +40,7 @@ lex(const char **a,
 	  "\n" { (*line)++, *column = 0; goto loop; }
 	  [ \t\v\r] { (*column)++; goto loop; }
 	  "#" .* { goto loop; }
-	  ident [a-zA-Z0-9-]* { return TOK_IDENT; }
+	  ident [a-zA-Z0-9=-]* { return TOK_IDENT; }
 	  [!-/:-@[-`{-~] { return **a; }
 	  '"' ("\\\""|[^"])* '"' { return TOK_STR; }
 	  dec { return TOK_INT; }

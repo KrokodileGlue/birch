@@ -1,12 +1,15 @@
 struct birch {
-	/* The registry that holds all configuration data. */
+	/* Registry that holds configuration data. */
 	struct tree reg;
 
 	/* Low-level server objects. */
 	struct list *server;
 
-	/* The global Lisp environment. */
+	/* Global Lisp environment. */
 	struct env *env;
+
+	/* Channel-specific Lisp environments. */
+	struct list *channel;
 };
 
 struct birch *birch_new(struct tree reg);
@@ -24,3 +27,6 @@ void birch_send(struct birch *b,
                 const char *chan,
                 const char *fmt,
                 ...);
+struct env *birch_get_env(struct birch *b,
+                          const char *server,
+                          const char *channel);
