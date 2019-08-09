@@ -3,15 +3,17 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
+#include <pthread.h>
 
 #include <kdg/kdgu.h>
 
 #include "list.h"
 #include "util.h"
 #include "irc.h"
-#include "table.h"
-#include "registry.h"
 #include "birch.h"
+#include "server.h"
+
 #include "lisp/lex.h"
 #include "lisp/lisp.h"
 #include "lisp/eval.h"
@@ -23,76 +25,70 @@
  * Evaluates all arguments beyond the first argument in `v` as if they
  * were an expression submitted in the channel indicated by the first
  * argument in `v`. The channel indicator string may be either the
- * string "global" or a string in the format: `network '/' channel`.
+ * string "global", the name of a server, or a string in the format:
+ * `network '/' channel`.
  *
  * Examples:
- *         <k> .channel "freenode/#birch" setq greeting "Hello!"
+ *         <k> .in "freenode/#birch" setq greeting "Hello!"
  *     <birch> "Hello!"
  *
- *         <k> .channel "global" setq greeting "Hello!"
+ *         <k> .in "global" setq greeting "Hello!"
  *     <birch> "Hello!"
  */
 
 struct value
-builtin_channel(struct env *env, struct value v)
+builtin_in(struct env *env, struct value v)
 {
-	/* TODO: Make print work with `channel`. */
-
 	if (v.type == VAL_NIL)
-		return error(env, "`channel' requires arguments");
+		return error(env, "`in' requires arguments");
 
-	if (cdr(v).type == VAL_NIL)
-		return error(env, "`channel' takes at"
-		             " least two arguments");
+	struct value place = eval(env, car(v));
 
-	if (car(v).type != VAL_STRING)
+	if (place.type == VAL_ERROR)
+		return place;
+
+	if (place.type != VAL_STRING)
 		return error(env, "first argument to"
-		             " `channel' must be a string");
+		             " `in' must be a string");
 
-	/* TODO: This seems volatile. */
-	if (kdgu_cmp(string(car(v)), &KDGU("global"), true, NULL))
+	/*
+	 * Only one argument, probably something like
+	 * `(in "global")`.
+	 */
+	if (cdr(v).type == VAL_NIL)
+		return NIL;
+
+	char *descriptor = tostring(string(place));
+	char **tok;
+	unsigned len;
+
+	tokenize(descriptor, "/", &tok, &len);
+
+	if (len < 1 || len > 2)
+		error(env, "malformed channel"
+		      " descriptor in call to `in'");
+
+	const char *server = tok[0];
+	const char *channel = tok[1];
+
+	if (len == 1 && !strcmp(server, "global"))
 		return eval(env->birch->env, cdr(v));
 
-	char *descriptor = tostring(string(car(v))),
-		*server = strdup(descriptor),
-		*channel = strdup(descriptor);
-
-	/*
-	 * We've guaranteed that the descriptor doesn't specify the
-	 * global environment, so it must have a slash at this point.
-	 */
-	if (!strchr(descriptor, '/')) {
-		free(descriptor), free(server), free(channel);
-		return error(env, "malformed channel descriptor");
-	}
-
-	strcpy(channel, strchr(descriptor, '/') + 1);
-	strcpy(server, descriptor);
-
-	/* No longer needed. */
-	free(descriptor);
-
-	/*
-	 * Truncate `server` to the portion of the descriptor behind
-	 * the slash.
-	 */
-	*strchr(server, '/') = 0;
-
-	/*
-	 * TODO: Ensure that the channel name is valid according to
-	 * the IRC RFC(s).
-	 */
+	if (len == 1)
+		return eval(birch_get_env(env->birch,
+		                          server,
+		                          "global"),
+		            cdr(v));
 
 	if (!strlen(channel) || *channel != '#')
 		return error(env, "channel descriptor in call"
-		             " to `channel' is invalid");
+		             " to `in' is invalid");
 
 	if (!strlen(server))
 		return error(env, "server descriptor in call"
-		             " to `channel' is invalid");
+		             " to `in' is invalid");
 
 	struct env *e = birch_get_env(env->birch, server, channel);
-	free(server), free(channel);
 
 	/*
 	 * If `e` is NULL then we've run out of memory;
@@ -106,53 +102,177 @@ builtin_channel(struct env *env, struct value v)
 }
 
 struct value
-builtin_regget(struct env *env, struct value v)
+builtin_connect(struct env *env, struct value v)
 {
-	struct value val = eval(env, car(v));
-	char buf[256];
-	memcpy(buf, string(val)->s, string(val)->len);
-	buf[string(val)->len] = 0;
-	struct tree tree = reg_get(env->birch->reg, buf);
-	struct value ret = NIL;
+	if (list_length(env, v).integer != 6)
+		return error(env, "`connect' takes six arguments");
 
-	switch (tree.type) {
-	case TREE_NIL: return NIL;
-	case TREE_INT: return (struct value){VAL_INT,{tree.integer}};
-	case TREE_STRING:
-		ret = gc_alloc(env, VAL_STRING);
-		string(ret) = kdgu_news(tree.string);
-		break;
-	case TREE_BOOL:
-		ret = tree.boolean ? TRUE : NIL;
-		break;
-	default:
-		ret = error(env, "registry value cannot be"
-		            " converted to a Lisp object");
+	v = eval_list(env, v);
+	if (v.type == VAL_ERROR) return v;
+	char *arg[6] = {NULL};
+	int port = -1;
+
+	for (int i = 0; i < 6; i++) {
+		if (i == 2) {
+			if (car(v).type != VAL_INT)
+				return error(env, "the third argument"
+				             " to `connect' must be"
+				             " an integer");
+			port = car(v).integer;
+			v = cdr(v);
+			continue;
+		}
+
+		if (car(v).type != VAL_STRING)
+			return error(env, "all arguments to"
+			             " `connect' must be strings"
+			             " except for the third");
+
+		arg[i] = tostring(string(car(v)));
+		v = cdr(v);
 	}
 
-	return ret;
+	struct server *s = birch_connect(env->birch,
+	                                 arg[0],
+	                                 arg[1],
+	                                 port,
+	                                 arg[3],
+	                                 arg[4],
+	                                 arg[5]);
+
+	if (!s) return NIL;
+
+	struct data *data = malloc(sizeof *data);
+	*data = (struct data){env->birch, s};
+	pthread_create(&s->thread, NULL, birch_main, data);
+
+	return TRUE;
 }
 
-static void
-print_thing(FILE *f, struct tree reg, const char *sofar)
+struct value
+builtin_stdout(struct env *env, struct value v)
 {
-	switch (reg.type) {
-	case TREE_BOOL: fprintf(f, "(regset \"%s\" %s)\n", sofar, reg.boolean ? "t" : "()"); break;
-	case TREE_INT: fprintf(f, "(regset \"%s\" %d)\n", sofar, reg.integer); break;
-	case TREE_NIL: fprintf(f, "(regset \"%s\" nil)\n", sofar); break;
-	case TREE_STRING: fprintf(f, "(regset \"%s\" \"%s\")\n", sofar, reg.string); break;
-	case TREE_TABLE: {
-		TABLE_FOR(reg.table) {
-			/* TODO: Buffer overruns. */
-			char buf[256];
-			if (sofar)
-				sprintf(buf, "%s.%s", sofar, KEY);
-			else
-				sprintf(buf, "%s", KEY);
-			print_thing(f, VAL, buf);
+	struct value r = eval_list(env, v);
+	if (r.type == VAL_ERROR) return r;
+
+	kdgu *out = kdgu_news("");
+
+	for (struct value p = r; p.type != VAL_NIL; p = cdr(p)) {
+		if (car(p).type == VAL_STRING) {
+			kdgu_append(out, string(car(p)));
+			continue;
 		}
-	} break;
+
+		struct value e = print_value(env, car(p));
+		if (e.type == VAL_ERROR) return e;
+		kdgu_append(out, string(e));
 	}
+
+	kdgu_print(out, stdout);
+	fflush(stdout);
+
+	return NIL;
+}
+
+static struct value
+quickstring(struct env *env, const char *str)
+{
+	struct value v = gc_alloc(env, VAL_STRING);
+	string(v) = kdgu_news(str);
+	return v;
+}
+
+struct value
+builtin_join(struct env *env, struct value v)
+{
+	if (list_length(env, v).integer != 2)
+		return error(env, "`join' takes two arguments");
+
+	struct value server = eval(env, car(v));
+	if (server.type == VAL_ERROR) return server;
+	struct value channel = eval(env, car(cdr(v)));
+	if (channel.type == VAL_ERROR) return channel;
+
+	if (server.type != VAL_STRING || channel.type != VAL_STRING)
+		return error(env, "arguments to `join'"
+		             " must be strings");
+
+	const char *serv = tostring(string(server)),
+		*chan = tostring(string(channel));
+
+	if (birch_join(env->birch, serv, chan))
+		return NIL;
+
+	struct value bind = find(env, make_symbol(env, "join-hook"));
+	if (bind.type == VAL_NIL) return TRUE;
+
+	struct value hooks = cdr(bind);
+
+	for (struct value i = hooks; i.type != VAL_NIL; i = cdr(i)) {
+		struct value call =
+			cons(env, car(i),
+			     cons(env, server,
+			          cons(env, channel,
+			               NIL)));
+		struct value val = eval(env, call);
+		if (val.type == VAL_ERROR) {
+			puts("error in join-hook:");
+			puts(tostring(string(val)));
+			puts("in:");
+			puts(tostring(string(print_value(env, call))));
+		}
+	}
+
+	struct birch *b = env->birch;
+
+	if (b->env->output->len) {
+		char *buf = malloc(b->env->output->len + 1);
+		memcpy(buf, b->env->output->s, b->env->output->len);
+		buf[b->env->output->len] = 0;
+		birch_send(b, serv, chan, true, "%s", buf);
+		kdgu_free(b->env->output);
+		free(buf);
+		b->env->output = kdgu_news("");
+	}
+
+	return TRUE;
+}
+
+/*
+ * TODO: Clean up these print functions.
+ */
+
+static void
+print_thing3(FILE *f, struct env *env, struct value bind)
+{
+	/* TODO: This doesn't allow builtin aliases. */
+	if (cdr(bind).type == VAL_BUILTIN) return;
+
+	if (cdr(bind).type != VAL_FUNCTION) {
+		fprintf(f, "(setq %s '%s)\n",
+		        tostring(string(car(bind))),
+		        tostring(string(print_value(env, cdr(bind)))));
+		return;
+	}
+
+	/* TODO: Should this be handled in `print_value`? */
+	fprintf(f, "(defun %s (", tostring(name(cdr(bind))));
+
+	for (struct value i = param(cdr(bind));
+	     i.type != VAL_NIL;
+	     i = cdr(i)) {
+		fprintf(f, "%s ", tostring(string(car(i))));
+	}
+
+	fprintf(f, ") ");
+
+	for (struct value i = body(cdr(bind));
+	     i.type != VAL_NIL;
+	     i = cdr(i)) {
+		fprintf(f, "%s ", tostring(string(print_value(env, car(i)))));
+	}
+
+	fprintf(f, ")\n");
 }
 
 static void
@@ -165,11 +285,7 @@ print_thing2(FILE *f, struct env *env)
 	     v = cdr(v)) {
 		struct env *env = env2->birch->env;
 		struct value bind = car(v);
-
-		/* TODO: This doesn't allow builtin aliases. */
-		if (cdr(bind).type == VAL_BUILTIN) continue;
-
-		fprintf(f, "(setq %s '%s)\n", tostring(string(car(bind))), tostring(string(print_value(env, cdr(bind)))));
+		print_thing3(f, env, bind);
 	}
 
 	/* For each channel... */
@@ -177,12 +293,15 @@ print_thing2(FILE *f, struct env *env)
 	     list;
 	     list = list->next) {
 		struct env *e = list->data;
-		fprintf(f, "(channel \"%s/%s\"", e->server, e->channel);
+		if (!strcmp(e->channel, "global"))
+			fprintf(f, "(in \"%s\" progn\n", e->server);
+		else
+			fprintf(f, "(in \"%s/%s\" progn\n", e->server, e->channel);
 		for (struct value v = e->vars;
 		     v.type != VAL_NIL;
 		     v = cdr(v)) {
 			struct value bind = car(v);
-			fprintf(f, "\n(setq %s '%s)", tostring(string(car(bind))), tostring(string(print_value(e, cdr(bind)))));
+			print_thing3(f, env, bind);
 		}
 		fprintf(f, ")\n");
 	}
@@ -191,82 +310,31 @@ print_thing2(FILE *f, struct env *env)
 struct value
 builtin_save(struct env *env, struct value v)
 {
-	(void)v;                /* Suppress warning. */
+	if (v.type != VAL_NIL)
+		return error(env, "`save' takes no arguments");
 
-	struct tree config_file = reg_get(env->birch->reg, "bot.config-file");
+	const char *config_file = "birch.lisp";
+	FILE *f = fopen(config_file, "w");
 
-	if (config_file.type == TREE_NIL) {
-		struct value error = gc_alloc(env, VAL_STRING);
-		string(error) =
-			kdgu_news("You must specify a config file"
-			          " with `bot.config-file' before"
-			          " using this command.");
-		return error;
-	}
+	if (!f) return quickstring(env, "Output file could not"
+	                           " be opened for writing.");
 
-	if (config_file.type != TREE_STRING) {
-		struct value error = gc_alloc(env, VAL_STRING);
-		string(error) =
-			kdgu_news("The `bot.config-file' registry"
-			          " entry must be a string.");
-		return error;
-	}
-
-	FILE *f = fopen(config_file.string, "w");
-
-	if (!f) {
-		struct value error = gc_alloc(env, VAL_STRING);
-		string(error) =
-			kdgu_news("Output file could not"
-			          " be opened for writing.");
-		return error;
-	}
-
-	print_thing(f, env->birch->reg, NULL);
 	print_thing2(f, env);
-
 	fclose(f);
 
-	struct value s = gc_alloc(env, VAL_STRING);
-	string(s) = kdgu_news("Saved.");
-
-	return s;
+	return quickstring(env, "Saved.");
 }
 
 struct value
-builtin_regset(struct env *env, struct value v)
+builtin_boundp(struct env *env, struct value v)
 {
-	if (v.type == VAL_NIL)
-		return error(env, "`regset' requires arguments");
-
-	if (cdr(v).type == VAL_NIL)
-		return error(env, "`regset' takes two arguments");
-
-	struct value val = eval(env, car(v));
-	struct value val2 = eval(env, car(cdr(v)));
-
-	if (val.type != VAL_STRING || val2.type != VAL_STRING)
-		return error(env, "arguments to `regset'"
-		             " must be strings");
-
-	char buf[256];
-	memcpy(buf, string(val)->s, string(val)->len);
-	buf[string(val)->len] = 0;
-
-	switch (val.type) {
-	case VAL_INT:
-		reg_set_int(env->birch->reg, buf, val2.integer);
-		break;
-	case VAL_STRING: {
-		char buf2[256];
-		memcpy(buf2, string(val2)->s, string(val2)->len);
-		buf2[string(val2)->len] = 0;
-		reg_set_string(env->birch->reg, buf, buf2);
-	} break;
-	default:
-		return error(env, "registry value must be a"
-		             " string or an integer");
-	}
-
-	return val2;
+	if (list_length(env, v).integer != 1)
+		return error(env, "builtin `boundp'"
+		             " takes one argument");
+	v = eval(env, car(v));
+	if (v.type == VAL_ERROR) return v;
+	if (v.type != VAL_SYMBOL)
+		return error(env, "argument to `boundp'"
+		             " must be a symbol");
+	return find(env, v).type == VAL_NIL ? NIL : TRUE;
 }

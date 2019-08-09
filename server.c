@@ -7,27 +7,29 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "registry.h"
+#include <kdg/kdgu.h>
+
+#include "birch.h"
 #include "server.h"
 #include "net.h"
 
+#include "lisp/lisp.h"
+
 struct server *
-server_new(const char *name, struct tree reg)
+server_new(struct birch *b,
+           const char *network,
+           const char *address,
+           int port)
 {
 	struct server *s = malloc(sizeof *s);
+	if (!s) return NULL;
 
 	memset(s, 0, sizeof *s);
-	s->name = strdup(name);
 
-	/* TODO: Check this thing. */
-	s->net = net_open(reg_get(reg, "address").string,
-	                  reg_get(reg, "port").integer);
-
-	net_send(s->net, "USER %s 0 * :%s\r\n",
-	         reg_get(reg, "user").string,
-	         reg_get(reg, "realname").string);
-	net_send(s->net, "NICK %s\r\n",
-	         reg_get(reg, "nick").string);
+	s->name = strdup(network);
+	if (!s->name) return free(s), NULL;
+	s->net = net_open(address, port);
+	if (!s->net) return free(s->name), free(s), NULL;
 
 	return s;
 }

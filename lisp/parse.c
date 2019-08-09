@@ -25,7 +25,7 @@ parse_expr(struct env *env, struct lexer *l)
 	case ')':  return RPAREN;
 	case '.':  return DOT;
 	case '\'': return quote(env, parse_expr(env, l));
-	case '`':  return backtick(env, parse_expr(env, l));
+	case '~':  return backtick(env, parse_expr(env, l));
 
 	case ',': {
 		struct value v = gc_alloc(env, l->s[l->idx] == '@'
@@ -39,24 +39,6 @@ parse_expr(struct env *env, struct lexer *l)
 			v.type = VAL_COMMA;
 			keyword(v) = parse_expr(env, l);
 		}
-
-		return v;
-	} break;
-
-	/* Array. */
-	case '[': {
-		struct value v = gc_alloc(env, VAL_ARRAY);
-
-		/* TODO: Hrm, this is incredibly dumb. */
-		struct value arr[512];
-		unsigned num = 0;
-
-		while ((t = tok(l)) && t->type != ']')
-			arr[num++] = parse_expr(env, l);
-
-		array(v) = malloc(num * sizeof v);
-		memcpy(array(v), arr, num * sizeof v);
-		obj(v).num = num;
 
 		return v;
 	} break;
@@ -104,6 +86,9 @@ parse(struct env *env, struct lexer *l)
 
 	for (;;) {
 		struct value o = parse_expr(env, l);
+
+		if (o.type == VAL_ERROR)
+			return o;
 
 		if (o.type == VAL_NULL)
 			return error(env, "unmatched `('");

@@ -11,13 +11,14 @@ struct token {
 
 	enum {
 		TOK_INT,
+		TOK_RAW_STR,
 		TOK_STR,
 		TOK_IDENT,
 		TOK_EOF
 	} type;
 
 	char *body;            /* Region of input this is from.     */
-	unsigned line, column, idx, len;
+	unsigned idx, len;
 
 	/*
 	 * Identifiers don't have their own data field because their

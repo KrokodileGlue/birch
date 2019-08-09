@@ -48,10 +48,10 @@ struct line {
 	} type;
 
 	char *text, *prefix, **middle, *trailing;
-	char *nick, *ident, *host;
+	char *nick, *ident, *host, *date;
 	unsigned num_middle;
 	int cmd, reply;
 };
 
-struct line *line_new(const char *s);
+struct line *line_new(const char *s, time_t timer);
 void line_free(struct line *l);

@@ -3,14 +3,16 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
+#include <pthread.h>
 
 #include <kdg/kdgu.h>
 
+#include "list.h"
 #include "util.h"
 #include "irc.h"
-#include "table.h"
-#include "registry.h"
 #include "birch.h"
+#include "server.h"
 #include "lisp/lex.h"
 #include "lisp/lisp.h"
 #include "lisp/eval.h"
@@ -22,10 +24,12 @@
 void
 lisp_init(struct birch *b)
 {
-	add_builtin(b->env, "channel", builtin_channel);
-	add_builtin(b->env, "regset", builtin_regset);
-	add_builtin(b->env, "regget", builtin_regget);
+	add_builtin(b->env, "in", builtin_in);
 	add_builtin(b->env, "save", builtin_save);
+	add_builtin(b->env, "connect", builtin_connect);
+	add_builtin(b->env, "join", builtin_join);
+	add_builtin(b->env, "stdout", builtin_stdout);
+	add_builtin(b->env, "boundp", builtin_boundp);
 }
 
 static void
@@ -39,7 +43,7 @@ send_value(struct birch *b,
 		char *buf = malloc(b->env->output->len + 1);
 		memcpy(buf, b->env->output->s, b->env->output->len);
 		buf[b->env->output->len] = 0;
-		birch_send(b, server, channel, "%s", buf);
+		birch_send(b, server, channel, true, "%s", buf);
 		kdgu_free(b->env->output);
 		free(buf);
 		/* TODO: Check malloc everywhere. */
@@ -61,8 +65,16 @@ send_value(struct birch *b,
 	char *buf = malloc(thing->len + 1);
 	memcpy(buf, thing->s, thing->len);
 	buf[thing->len] = 0;
-	birch_send(b, server, channel, "%s", buf);
+	birch_send(b, server, channel, true, "%s", buf);
 	free(buf);
+}
+
+static struct value
+quickstring(struct env *env, const char *str)
+{
+	struct value v = gc_alloc(env, VAL_STRING);
+	string(v) = kdgu_news(str);
+	return v;
 }
 
 static void
@@ -71,14 +83,24 @@ do_msg_hook(struct birch *b, struct env *env, struct line *l)
 	struct value bind = find(env, make_symbol(env, "msg-hook"));
 	if (bind.type == VAL_NIL) return;
 
-	for (struct value msg_hook = cdr(bind);
-	     msg_hook.type != VAL_NIL;
-	     msg_hook = cdr(msg_hook)) {
-		struct value hook = car(msg_hook);
-		struct value arg = gc_alloc(env, VAL_STRING);
-		string(arg) = kdgu_news(l->trailing);
-		struct value call = cons(env, hook, cons(env, arg, NIL));
-		eval(env, call);
+	struct value arg = NIL;
+
+	arg = cons(env, quickstring(env, l->trailing), arg);
+	arg = cons(env, quickstring(env, l->nick), arg);
+	arg = cons(env, quickstring(env, l->date), arg);
+	arg = quote(env, arg);
+
+	for (struct value hook = cdr(bind);
+	     hook.type != VAL_NIL;
+	     hook = cdr(hook)) {
+		struct value res = eval(env,
+		                        cons(env,
+		                             car(hook),
+		                             cons(env, arg, NIL)));
+		if (res.type == VAL_ERROR) {
+			puts("msg-hook error:");
+			puts(tostring(string(res)));
+		}
 	}
 }
 
@@ -87,35 +109,15 @@ lisp_interpret_line(struct birch *b,
                     const char *server,
                     struct line *l)
 {
-	char *text = NULL;
+	do_msg_hook(b, birch_get_env(b, server, l->middle[0]), l);
 
-	/* TODO: Do triggers. */
-	if (!strncmp(l->trailing, ".(", 2)) {
-		text = strdup(l->trailing + 2);
-	} else if (*l->trailing == '.') {
-		text = malloc(strlen(l->trailing + 1) + 2);
-		strcpy(text, l->trailing + 1);
-		text[strlen(text) + 1] = 0;
-		text[strlen(text)] = ')';
-	} else {
-		do_msg_hook(b, birch_get_env(b, server, l->middle[0]), l);
-		return;
+	if (b->env->output->len) {
+		char *buf = tostring(b->env->output);
+		birch_send(b, server, l->middle[0], true, "%s", buf);
+		kdgu_free(b->env->output);
+		free(buf);
+		b->env->output = kdgu_news("");
 	}
 
-	struct env *env = birch_get_env(b, server, l->middle[0]);
-	struct lexer *lexer = new_lexer("*birch*", text);
-	struct value shite = parse(env, lexer);
-
-	if (shite.type == VAL_ERROR) {
-		send_value(b, env, server, l->middle[0], shite);
-		return;
-	}
-
-	if (tok(lexer)) {
-		birch_send(b, server, l->middle[0],
-		           "error: incomplete command");
-		return;
-	}
-
-	send_value(b, env, server, l->middle[0], eval(env, shite));
+	//send_value(b, env, server, l->middle[0], eval(env, shite));
 }

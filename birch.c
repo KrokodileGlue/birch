@@ -5,6 +5,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <time.h>
 
 #include <kdg/kdgu.h>
 #include <curl/curl.h>
@@ -17,66 +18,59 @@
 #include "lisp/eval.h"
 #include "lisp/gc.h"
 
-#include "table.h"
-#include "registry.h"
 #include "list.h"
 #include "server.h"
 #include "net.h"
 #include "irc.h"
 #include "lisp.h"
+#include "util.h"
 
 #include "birch.h"
 
 struct birch *
-birch_new(struct tree reg)
+birch_new(void)
 {
 	struct birch *b = malloc(sizeof *b);
 	memset(b, 0, sizeof *b);
-	b->reg = reg;
 	b->env = new_environment(b, "global", "global");
 	lisp_init(b);
 	return b;
 }
 
-void
-birch_connect(struct birch *b)
+struct server *
+birch_connect(struct birch *b,
+              const char *network,
+              const char *address,
+              int port,
+              const char *user,
+              const char *nick,
+              const char *realname)
 {
-	TABLE_FOR(reg_get(b->reg, "server").table)
-		list_add(&b->server, server_new(KEY,
-		   reg_get(b->reg, "server.%s", KEY)));
+	struct server *s = server_new(b, network, address, port);
+	if (!s) return NULL;
+
+	list_add(&b->server, s);
+
+	net_send(s->net, "USER %s 0 * :%s\r\n", user, realname);
+	net_send(s->net, "NICK %s\r\n", nick);
+
+	return s;
 }
 
-/*
- * Looks up a channel property. Evaluates to the channel table itself
- * if used with empty arguments. Only used in `join()`.
- */
-#define CHANNEL_PROPERTY(X,...)	  \
-	reg_get(b->reg, "server.%s.channel" X, server, __VA_ARGS__)
-
-static void
-join(struct birch *b, const char *server, struct server *serv)
+int
+birch_join(struct birch *b,
+           const char *serv,
+           const char *chan)
 {
-	TABLE_FOR(CHANNEL_PROPERTY("","").table)
-		if (CHANNEL_PROPERTY(".%s.autojoin", KEY).boolean)
-			server_join(serv, KEY);
+	struct server *s = list_get(b->server,
+	                            (void *)serv,
+	                            server_cmp);
+	if (!s) return 1;
+	server_join(s, chan);
+	return 0;
 }
 
-#undef CHANNEL_PROPERTY
-
-void
-birch_join(struct birch *b)
-{
-	/* For each server join its channels. */
-	TABLE_FOR(reg_get(b->reg, "server").table)
-		join(b, KEY, list_get(b->server, KEY, server_cmp));
-}
-
-struct data {
-	struct birch *b;
-	struct server *server;
-};
-
-static void *
+void *
 birch_main(void *data)
 {
 	struct birch *b = ((struct data *)data)->b;
@@ -86,7 +80,11 @@ birch_main(void *data)
 		char buf[512];
 		net_read(server->net, buf);
 		if (!strlen(buf)) break;
-		struct line *line = line_new(buf);
+
+		time_t timer;
+		time(&timer);
+
+		struct line *line = line_new(buf, timer);
 
 		if (line->type == LINE_CMD && line->cmd == CMD_PING) {
 			net_send(server->net, "PONG :%s\r\n", line->trailing);
@@ -100,34 +98,6 @@ birch_main(void *data)
 	}
 
 	return NULL;
-}
-
-/*
- * Begins listener threads and launches the main I/O loops.
- */
-
-void
-birch(struct birch *b)
-{
-	curl_global_init(CURL_GLOBAL_ALL);
-	struct list *l = b->server;
-
-	int idx = 0;
-	pthread_t thread[10];   /* TODO: This hardcoded maximum. */
-
-	/* Walk along the list of servers starting listen threads. */
-	while (l) {
-		struct data *data = malloc(sizeof *data);
-		*data = (struct data){b, l->data};
-		pthread_create(&thread[idx], NULL, birch_main, data);
-		idx++;
-		l = l->next;
-	}
-
-	for (int i = 0; i < idx; i++)
-		pthread_join(thread[i], NULL);
-
-	curl_global_cleanup();
 }
 
 static size_t
@@ -153,35 +123,36 @@ void
 birch_paste(struct birch *b,
             const char *server,
             const char *chan,
-            const char *buf)
+            const char *str)
 {
 	CURL *curl = curl_easy_init();
-	if (!curl) return;
-	char *out = NULL;
+	char *out = NULL, *data = NULL, *buf = NULL;
 
-	char *data = curl_easy_escape(curl, buf, strlen(buf));
-	char *bug = malloc(strlen(data) + 5);
-	sprintf(bug, "f:1=%s", data);
+	if (!curl) goto fail;
+	data = curl_easy_escape(curl, str, strlen(str));
+	if (!data) goto fail;
+	buf = malloc(strlen(data) + 5);
+	if (!buf) goto fail;
+
+	sprintf(buf, "f:1=%s", data);
+	printf("buf: %s\n", buf);
 
 	/* TODO: Make the paste site customizable. */
 	curl_easy_setopt(curl, CURLOPT_URL, "ix.io/");
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, receive);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &out);
-	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, bug);
+	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, buf);
 
-	CURLcode res = curl_easy_perform(curl);
+	if (curl_easy_perform(curl) != CURLE_OK) goto fail;
 
-	if (res != CURLE_OK) {
-		birch_send(b, server, chan,
-		           "Line was too long and paste failed.");
-		return;
-	}
+	birch_send(b, server, chan, false, "%s", out);
+	return;
 
-	/*
-	 * This depends on the response being small enough to not get
-	 * pasted. TODO?
-	 */
-	birch_send(b, server, chan, "%s", out);
+ fail:
+	birch_send(b, server, chan, false, "Paste failed.");
+ cleanup:
+	free(data);
+	free(buf);
 	curl_easy_cleanup(curl);
 }
 
@@ -189,10 +160,20 @@ void
 birch_send(struct birch *b,
            const char *server,
            const char *chan,
+           bool paste,
            const char *fmt,
            ...)
 {
 	if (!strcmp(server, "global")) return;
+
+	struct server *serv = list_get(b->server,
+	                               (void *)server,
+	                               server_cmp);
+
+	if (!serv) {
+		/* TODO: Errors... */
+		return;
+	}
 
 	int len = 512;
 	char *buf = malloc(len + 1);
@@ -205,8 +186,8 @@ birch_send(struct birch *b,
 
 		if (ret < len) break;
 
-		if (len *= 2 > 1000000) {
-			birch_send(b, server, chan,
+		if ((len *= 2) > 10000) {
+			birch_send(b, server, chan, false,
 			           "Output was too long.");
 			free(buf);
 			return;
@@ -216,33 +197,23 @@ birch_send(struct birch *b,
 		buf = realloc(buf, len + 1);
 	}
 
-	struct tree ll = reg_get(b->reg, "server.%s.channel."
-	                         "%s.max_line_length", server, chan);
-
-	if (ll.type == TREE_NIL)
-		ll = reg_get(b->reg, "server.%s.max_line_length", server);
-
-	if (ll.type == TREE_INT && (int)strlen(buf) >= ll.integer) {
-		birch_paste(b, server, chan, buf);
-		return;
-	}
-
 	/*
-	 * TODO: Other transformations might be good here, and they
-	 * should mostly be turnoffable. This should probably be
-	 * implemented in Lisp. out_hook?
+	 * TODO: `out-hook' for filtering and other hooks (e.g. to
+	 * control pastes).
 	 */
-	for (size_t i = 0; i < strlen(buf); i++)
-		if (buf[i] == '\n')
-			buf[i] = ' ';
 
-	char bug[513];
-	if (snprintf(bug, 513, "PRIVMSG %s :%s\r\n", chan, buf) > 512) {
+	if (paste && strchr(buf, '\n')) {
 		birch_paste(b, server, chan, buf);
 		return;
 	}
 
-	net_send(((struct server *)list_get(b->server, (void *)server, server_cmp))->net, "%s", bug);
+	char output[513];
+	if (snprintf(output, 513, "PRIVMSG %s :%s\r\n", chan, buf) > 256) {
+		birch_paste(b, server, chan, buf);
+		return;
+	}
+
+	net_send(serv->net, "%s", output);
 }
 
 /*
@@ -251,9 +222,12 @@ birch_send(struct birch *b,
  */
 
 struct env *
-birch_get_env(struct birch *b, const char *server, const char *channel)
+birch_get_env(struct birch *b,
+              const char *server,
+              const char *channel)
 {
-	if (!strcmp(channel, "global")) return b->env;
+	if (!strcmp(server, "global") || *channel != '#')
+		return b->env;
 
 	struct channel {
 		const char *server, *channel;
@@ -274,10 +248,68 @@ birch_get_env(struct birch *b, const char *server, const char *channel)
 	 */
 	if (env) return env;
 
-	env = push_env(b->env, NIL, NIL);
+	if (!strcmp(channel, "global")) {
+		env = push_env(b->env, NIL, NIL);
+		env->server = strdup(server);
+		env->channel = strdup(channel);
+		list_add(&b->channel, env);
+		return env;
+	}
+
+	env = push_env(birch_get_env(b, server, "global"), NIL, NIL);
 	env->server = strdup(server);
 	env->channel = strdup(channel);
 	list_add(&b->channel, env);
 
 	return env;
+}
+
+int
+birch_config(struct birch *b, const char *path)
+{
+	char *code = load_file(path);
+	if (!code) return 1;
+
+	struct env *env = b->env;
+	struct lexer *lexer = new_lexer("*command*", code);
+	struct value expr = NIL;
+
+	do {
+		struct token *t = tok(lexer);
+
+		if (!t) {
+			struct value init = find(env, make_symbol(env, "init"));
+			struct value call = gc_alloc(env, VAL_CELL);
+			car(call) = cdr(init);
+			cdr(call) = NIL;
+			struct value val = eval(env, call);
+
+			if (val.type == VAL_ERROR) {
+				puts(tostring(string(val)));
+				puts(tostring(string(print_value(env, expr))));
+				return 1;
+			}
+
+			return 0;
+		}
+
+		if (t->type != '(') return 1;
+
+		expr = parse(env, lexer);
+
+		if (expr.type == VAL_ERROR) {
+			puts(tostring(string(expr)));
+			return 1;
+		}
+
+		struct value val = eval(env, expr);
+
+		if (val.type == VAL_ERROR) {
+			puts(tostring(string(val)));
+			puts(tostring(string(print_value(env, expr))));
+			return 1;
+		}
+	} while (expr.type != VAL_NIL);
+
+	return 0;
 }

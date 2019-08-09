@@ -1,5 +1,6 @@
 #include <kdg/kdgu.h>
 
+#include "../birch.h"
 #include "lex.h"
 #include "lisp.h"
 #include "gc.h"
@@ -7,13 +8,7 @@
 static int
 alloc(struct env *env)
 {
-	for (int i = 0; i < GC_MAX_OBJECT; i++) {
-		if (env->obj[i].used) continue;
-		env->obj[i].used = true;
-		return i;
-	}
-
-	return -1;
+	return env->birch->env->idx++;
 }
 
 struct value

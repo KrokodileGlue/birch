@@ -192,9 +192,9 @@ eval(struct env *env, struct value v)
 
 	case VAL_INT:     case VAL_STRING:
 	case VAL_BUILTIN: case VAL_FUNCTION:
-	case VAL_ERROR:   case VAL_ARRAY:
-	case VAL_TRUE:    case VAL_NIL:
-	case VAL_KEYWORD: case VAL_KEYWORDPARAM:
+	case VAL_ERROR:   case VAL_TRUE:
+	case VAL_NIL:     case VAL_KEYWORD:
+	case VAL_KEYWORDPARAM:
 		return v;
 
 	case VAL_COMMA: case VAL_COMMAT:

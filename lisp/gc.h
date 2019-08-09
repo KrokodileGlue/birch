@@ -19,12 +19,6 @@ struct object {
 			struct value rest;
 		};
 
-		/* Array. */
-		struct {
-			struct value *array;
-			unsigned num;
-		};
-
 		/* Keyword. */
 		struct value keyword;
 
@@ -39,10 +33,8 @@ struct object {
 #define keyword(X) (env->obj[(X).obj].keyword)
 #define builtin(X) (env->obj[(X).obj].builtin)
 #define string(X) (env->obj[(X).obj].string)
-#define array(X) (env->obj[(X).obj].array)
 #define car(X) (env->obj[(X).obj].car)
 #define cdr(X) (env->obj[(X).obj].cdr)
-#define num(X) (env->obj[(X).obj].num)
 
 #define obj(X) (env->obj[(X).obj])
 #define optional(X) (env->obj[(X).obj].optional)
@@ -54,7 +46,7 @@ struct object {
 #define name(X) (env->obj[(X).obj].name)
 #define docstring(X) (env->obj[(X).obj].docstring)
 
-#define GC_MAX_OBJECT 10000
+#define GC_MAX_OBJECT 100000
 
 struct value gc_alloc(struct env *env, enum value_type type);
 struct value gc_copy(struct env *env, struct value v);

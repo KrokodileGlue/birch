@@ -11,7 +11,6 @@ struct value {
 		VAL_FUNCTION,
 		VAL_MACRO,
 		VAL_ENV,
-		VAL_ARRAY,
 		VAL_KEYWORDPARAM,
 		VAL_KEYWORD,
 		VAL_COMMA,
@@ -46,8 +45,8 @@ struct env {
 
 	/*
 	 * The names of the server and channel this environment is
-	 * associated with as they appears in the registry, or both
-	 * are `global`.
+	 * associated with, the name of the server and "global", or
+	 * both are "global".
 	 */
 	char *server, *channel;
 
@@ -60,6 +59,8 @@ struct env {
 	 * each command is executed.
 	 */
 	kdgu *output;
+
+	int idx;
 };
 
 struct env *new_environment(struct birch *b,

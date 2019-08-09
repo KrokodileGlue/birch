@@ -11,8 +11,6 @@
 #include "eval.h"
 #include "gc.h"
 
-#include "../table.h"
-#include "../registry.h"
 #include "../birch.h"
 #include "../util.h"
 
@@ -27,7 +25,6 @@ const char **value_name = (const char *[]){
 	"function",
 	"macro",
 	"env",
-	"array",
 	"keywordparam",
 	"keyword",
 	"comma",
@@ -104,14 +101,6 @@ print_value(struct env *env, struct value v)
 		break;
 	case VAL_BUILTIN:
 		out = kdgu_news("<builtin>");
-		break;
-	case VAL_ARRAY:
-		for (unsigned i = 0; i < obj(v).num; i++) {
-			struct value e = print_value(env, array(v)[i]);
-			if (e.type == VAL_ERROR) return e;
-			assert(e.type == VAL_STRING);
-			kdgu_append(out, string(e));
-		}
 		break;
 	case VAL_KEYWORD:
 		sprintf(buf, "&%.*s",
@@ -312,6 +301,8 @@ new_environment(struct birch *b,
 	/* Initialize garbage-collected objects. */
 	env->obj = malloc(GC_MAX_OBJECT * sizeof *env->obj);
 	memset(env->obj, 0, GC_MAX_OBJECT * sizeof *env->obj);
+	env->idx = 0;
+	b->env = env;
 
 	/*
 	 * Note: This should only be done here (in the initialization

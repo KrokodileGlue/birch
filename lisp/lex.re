@@ -8,6 +8,7 @@ struct lexer *
 new_lexer(const char *file, const char *s)
 {
 	struct lexer *l = malloc(sizeof *l);
+
 	memset(l, 0, sizeof *l);
 
 	l->s = s;
@@ -17,36 +18,42 @@ new_lexer(const char *file, const char *s)
 	return l;
 }
 
-#define YYCTYPE char
+#define YYCTYPE unsigned char
 #define YYFILL(X) do {} while (0)
 #define YYMARKER (*a)
 #define YYCURSOR (*b)
 
 static int
-lex(const char **a,
-     const char **b,
-     unsigned *line,
-     unsigned *column,
-     const char *YYLIMIT)
+lex(const unsigned char **a,
+     const unsigned char **b,
+     const unsigned char *YYLIMIT)
 {
  loop:
 	YYMARKER = YYCURSOR;
+
 	/*!re2c
-	  dec = [1-9][0-9]*;
-	  bin = '0b' [01]+;
-	  hex = '0x' [0-9a-fA-F]+;
-	  oct = '0' [0-7]*;
-	  ident = [a-zA-Z+=!#$%^/*<>-];
-	  "\n" { (*line)++, *column = 0; goto loop; }
-	  [ \t\v\r] { (*column)++; goto loop; }
-	  "#" .* { goto loop; }
-	  ident [a-zA-Z0-9=-]* { return TOK_IDENT; }
-	  [!-/:-@[-`{-~] { return **a; }
-	  '"' ("\\\""|[^"])* '"' { return TOK_STR; }
-	  dec { return TOK_INT; }
-	  bin | hex | oct { YYMARKER--; return TOK_INT; }
-	  * { *b = NULL; return -1; }
-	  "\000" { YYCURSOR--; return TOK_EOF; }
+	dec = [1-9][0-9]*;
+	bin = '0b' [01]+;
+	hex = '0x' [0-9a-fA-F]+;
+	oct = '0' [0-7]*;
+	'\043/' [^/\000]* '/' { return TOK_RAW_STR; }
+	'"' {
+		while (*YYCURSOR && *YYCURSOR != '"') {
+			if (*YYCURSOR == '\\') YYCURSOR++;
+			YYCURSOR++;
+		}
+		if (*YYCURSOR != '"') return -1;
+		YYCURSOR++;
+		return TOK_STR;
+	}
+	";" [^\n\000]* { goto loop; }
+	[ \t\v\r\n] { goto loop; }
+	[a-zA-Z\[\]\{\}+=!$%^/\\`|*<>-]* { return TOK_IDENT; }
+	[!-/:-@[-`{-~] { return **a; }
+	dec { return TOK_INT; }
+	bin | hex | oct { YYMARKER--; return TOK_INT; }
+	* { YYCURSOR--; return TOK_EOF; }
+	"\000" { YYCURSOR--; return TOK_EOF; }
 	*/
 }
 
@@ -66,6 +73,7 @@ lex_escapes(struct token *t)
 		case 'n': r[j++] = '\n'; break;
 		case 't': r[j++] = '\t'; break;
 		case '"': r[j++] = '"'; break;
+		case '\\': r[j++] = '\\'; break;
 		case '\n': break;
 		default:
 			r[j++] = '\\';
@@ -83,7 +91,7 @@ tok(struct lexer *l)
 	const char *a = l->s + l->idx;
 	const char *b = a;
 
-	t->type = lex(&a, &b, &l->line, &l->column, l->e);
+	t->type = lex(&a, &b, l->e);
 	if (t->type == TOK_EOF) return free(t), NULL;
 	if (!b) return free(t), NULL;
 
@@ -97,19 +105,6 @@ tok(struct lexer *l)
 
 	t->idx = l->idx;
 	t->len = l->len;
-	t->line = l->line;
-	t->column = l->column;
-
-	/*
-	 * `lex()` can't count lines and columns inside token bodies,
-	 * so we'll do it here.
-	 */
-
-	for (unsigned i = 0; i < l->len; i++) {
-		if (t->body[i] == '\n')
-			l->line++, l->column = 0;
-		else l->column++;
-	}
 
 	/* Fill out the type-specific fields. */
 
@@ -118,7 +113,13 @@ tok(struct lexer *l)
 		t->s = kdgu_news(lex_escapes(t));
 		break;
 	case TOK_INT:
-		t->i = atoi(t->body);
+		t->i = strtol(t->body, NULL, 0);
+		break;
+	case TOK_RAW_STR:
+		t->s = kdgu_new(KDGU_FMT_UTF8,
+		                t->body + 1,
+		                strlen(t->body) - 2);
+		t->type = TOK_STR;
 		break;
 	default:;
 	}

@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <time.h>
 
 #include "irc.h"
 
@@ -48,7 +49,8 @@ static const char *cmd_str[] = {
 	"ISON"
 };
 
-int look_up_cmd(const char *cmd)
+int
+look_up_cmd(const char *cmd)
 {
 	for (size_t i = 0; i < sizeof cmd_str / sizeof *cmd_str; i++)
 		if (!strcmp(cmd_str[i], cmd))
@@ -56,7 +58,8 @@ int look_up_cmd(const char *cmd)
 	return -1;
 }
 
-struct line *line_new(const char *a)
+struct line *
+line_new(const char *a, time_t timer)
 {
 	struct line *l = malloc(sizeof *l);
 	memset(l, 0, sizeof *l);
@@ -138,10 +141,16 @@ struct line *line_new(const char *a)
 		strcpy(l->host, a);
 	}
 
+	l->date = malloc(26);
+	strftime(l->date, 26,
+	         "%Y-%m-%d %H:%M:%S",
+	         localtime(&timer));
+
 	return l;
 }
 
-void line_free(struct line *l)
+void
+line_free(struct line *l)
 {
 	if (!l) return;
 	for (unsigned i = 0; i < l->num_middle; i++)

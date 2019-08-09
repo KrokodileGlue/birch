@@ -4,34 +4,28 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include <curl/curl.h>
+#include <pthread.h>
+
+#include "server.h"
 #include "list.h"
 #include "net.h"
-#include "table.h"
-#include "registry.h"
 #include "birch.h"
 
 int
 main(void)
 {
-	struct tree reg = reg_new();
+	curl_global_init(CURL_GLOBAL_ALL);
 
-	reg_set_string(reg, "server.freenode.address", "localhost");
-	reg_set_int(reg, "server.freenode.port", 1221);
+	struct birch *b = birch_new();
+	if (birch_config(b, "birch.lisp")) return 1;
 
-	reg_set_string(reg, "server.freenode.user", "birch");
-	reg_set_string(reg, "server.freenode.nick", "birch");
-	reg_set_string(reg, "server.freenode.name", "birch");
-	reg_set_string(reg, "server.freenode.realname", "realname");
+	for (struct list *l = b->server; l; l = l->next) {
+		struct server *s = l->data;
+		pthread_join(s->thread, NULL);
+	}
 
-	//reg_set_bool(reg, "server.freenode.channel.#omp-fanclub.autojoin", true);
-	reg_set_bool(reg, "server.freenode.channel.#test.autojoin", true);
-	reg_set_bool(reg, "server.freenode.channel.#test2.autojoin", true);
-
-	struct birch *bot = birch_new(reg);
-
-	birch_connect(bot);
-	birch_join(bot);
-	birch(bot);
+	curl_global_cleanup();
 
 	return 0;
 }
