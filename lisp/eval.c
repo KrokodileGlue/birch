@@ -235,3 +235,20 @@ eval(struct env *env, struct value v)
 
 	return error(env, "bug: unreachable");
 }
+
+struct value
+eval_string(struct env *env, const char *code)
+{
+	struct lexer *lexer = new_lexer("*string*", code);
+	struct token *t = tok(lexer);
+
+	if (t->type != '(')
+		return error(env, "malformed s-expression in"
+		             " call to eval_string");
+
+	#include "parse.h"
+
+	struct value v = parse(env, lexer);
+	if (v.type == VAL_ERROR) return v;
+	return eval(env, v);
+}

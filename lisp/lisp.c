@@ -277,6 +277,21 @@ add_builtin(struct env *env, const char *name, builtin *f)
 	add_variable(env, sym, prim);
 }
 
+static void
+load_macros(struct env *env)
+{
+	eval_string(env, "(defmacro null (x) ~(if ,x nil t))");
+	eval_string(env, "(defmacro not (x) ~(null ,x))");
+	eval_string(env, "(defmacro map (x y)\
+  ~(if (cdr ,y)\
+       (cons (,x (car ,y)) (map ,x (cdr ,y)))\
+     (cons (,x (car ,y)) nil)))");
+	eval_string(env, "(defmacro let (defs &rest expr)\
+  ~((lambda ,(map car defs)\
+      ,@expr)\
+    ,@(map car (map cdr defs))))");
+}
+
 /*
  * This should only ever be called to construct the global
  * environment. All others should be constructed with `push_env` using
@@ -305,12 +320,13 @@ new_environment(struct birch *b,
 	b->env = env;
 
 	/*
-	 * Note: This should only be done here (in the initialization
+	 * Note: These should only be done here (in the initialization
 	 * for the global environment) because it's redundant to load
-	 * the same builtins when they're accessible to all channels
-	 * through the global environment.
+	 * the same builtins and macros when they're accessible to all
+	 * channels through the global environment.
 	 */
 	load_builtins(env);
+	load_macros(env);
 
 	return env;
 }

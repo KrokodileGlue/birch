@@ -1,13 +1,3 @@
-(defmacro null (x) ~(if ,x nil t))
-(defmacro not (x) ~(null ,x))
-(defmacro map (x y)
-  ~(if (cdr ,y)
-       (cons (,x (car ,y)) (map ,x (cdr ,y)))
-     (cons (,x (car ,y)) nil)))
-(defmacro let (defs &rest expr)
-  ~((lambda ,(map car defs)
-      ,@expr)
-    ,@(map car (map cdr defs))))
 (defq config-file "birch.lisp")
 (defq msg-hook '(sed-line command log-line))
 (defq join-hook '(init-log
