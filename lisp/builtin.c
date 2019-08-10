@@ -493,6 +493,35 @@ builtin_while(struct env *env, struct value v)
 }
 
 struct value
+builtin_let(struct env *env, struct value v)
+{
+	if (list_length(env, v).integer < 1)
+		return error(env, "builtin `let' requires"
+		             " at least one argument");
+
+	if (car(v).type != VAL_CELL)
+		return error(env, "first argument to `let' must"
+		             " be an initializer list");
+
+	for (struct value i = car(v); i.type != VAL_NIL; i = cdr(i)) {
+		if (car(i).type == VAL_SYMBOL) {
+			add_variable(env, car(car(i)), NIL);
+			continue;
+		}
+
+		if (car(i).type != VAL_CELL)
+			return error(env, "invalid initializer in `let'");
+
+		struct value val = eval(env, car(cdr(car(i))));
+		if (val.type == VAL_ERROR) return val;
+
+		add_variable(env, car(car(i)), val);
+	}
+
+	return progn(env, cdr(v));
+}
+
+struct value
 builtin_nth(struct env *env, struct value v)
 {
 	if (v.type != VAL_CELL
@@ -1010,6 +1039,7 @@ load_builtins(struct env *env)
 	add_builtin(env, "cons",    builtin_cons);
 	add_builtin(env, "eval",    builtin_eval);
 	add_builtin(env, "setq",    builtin_setq);
+	add_builtin(env, "let",     builtin_let);
 	add_builtin(env, "nth",     builtin_nth);
 	add_builtin(env, "set",     builtin_set);
 	add_builtin(env, "car",     builtin_car);

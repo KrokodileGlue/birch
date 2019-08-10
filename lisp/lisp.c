@@ -286,10 +286,6 @@ load_macros(struct env *env)
   ~(if (cdr ,y)\
        (cons (,x (car ,y)) (map ,x (cdr ,y)))\
      (cons (,x (car ,y)) nil)))");
-	eval_string(env, "(defmacro let (defs &rest expr)\
-  ~((lambda ,(map car defs)\
-      ,@expr)\
-    ,@(map car (map cdr defs))))");
 }
 
 /*
