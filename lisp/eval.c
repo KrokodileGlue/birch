@@ -224,7 +224,8 @@ eval(struct env *env, struct value v)
 	case VAL_SYMBOL: {
 		struct value bind = find(env, v);
 		if (bind.type != VAL_NIL) return cdr(bind);
-		return error(env, "undeclared identifier `%s'", tostring(string(v)));
+		return error(env, "evaluation of unbound symbol `%s'",
+		             tostring(string(v)));
 	}
 
 	/* This should never happen. */
@@ -233,7 +234,8 @@ eval(struct env *env, struct value v)
 		return error(env, "bug: unimplemented evaluator");
 	}
 
-	return error(env, "bug: unreachable");
+	return error(env, "bug: unreachable: "
+	             __FILE__ ":%d", __LINE__);
 }
 
 struct value

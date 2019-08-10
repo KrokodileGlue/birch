@@ -53,13 +53,6 @@ struct env {
 	struct birch *birch;
 	struct object *obj;
 
-	/*
-	 * The accumulation of the output of all print statements
-	 * evaluated so far. This is reset in `../builtin.c` after
-	 * each command is executed.
-	 */
-	kdgu *output;
-
 	int idx;
 };
 

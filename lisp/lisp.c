@@ -311,7 +311,6 @@ new_environment(struct birch *b,
 	env->vars = NIL;
 	env->server = strdup(server);
 	env->server = strdup(channel);
-	env->output = kdgu_news("");
 
 	/* Initialize garbage-collected objects. */
 	env->obj = malloc(GC_MAX_OBJECT * sizeof *env->obj);
@@ -342,7 +341,6 @@ make_env(struct env *env, struct value map)
 	r->obj = env->obj;
 	r->vars = map;
 	r->up = env;
-	r->output = NULL;
 
 	return r;
 }

@@ -45,3 +45,8 @@ struct env *birch_get_env(struct birch *b,
                           const char *channel);
 int birch_config(struct birch *b,
                  const char *path);
+void send_value(struct birch *b,
+                struct env *env,
+                const char *server,
+                const char *channel,
+                struct value v);

@@ -8,18 +8,18 @@
 
 #include <kdg/kdgu.h>
 
-#include "list.h"
-#include "util.h"
-#include "irc.h"
-#include "birch.h"
-#include "server.h"
-
 #include "lisp/lex.h"
 #include "lisp/lisp.h"
 #include "lisp/eval.h"
 #include "lisp/gc.h"
 #include "lisp/error.h"
 #include "lisp/parse.h"
+
+#include "list.h"
+#include "util.h"
+#include "irc.h"
+#include "birch.h"
+#include "server.h"
 
 /*
  * Evaluates all arguments beyond the first argument in `v` as if they
@@ -214,25 +214,15 @@ builtin_join(struct env *env, struct value v)
 			     cons(env, server,
 			          cons(env, channel,
 			               NIL)));
-		struct value val = eval(env, call);
-		if (val.type == VAL_ERROR) {
+		struct value res = eval(env, call);
+		if (res.type == VAL_ERROR) {
 			puts("error in join-hook:");
-			puts(tostring(string(val)));
+			puts(tostring(string(res)));
 			puts("in:");
 			puts(tostring(string(print_value(env, call))));
+		} else if (res.type != VAL_NIL) {
+			send_value(env->birch, env, serv, chan, res);
 		}
-	}
-
-	struct birch *b = env->birch;
-
-	if (b->env->output->len) {
-		char *buf = malloc(b->env->output->len + 1);
-		memcpy(buf, b->env->output->s, b->env->output->len);
-		buf[b->env->output->len] = 0;
-		birch_send(b, serv, chan, true, "%s", buf);
-		kdgu_free(b->env->output);
-		free(buf);
-		b->env->output = kdgu_news("");
 	}
 
 	return TRUE;

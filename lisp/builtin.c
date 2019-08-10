@@ -190,38 +190,6 @@ builtin_fn(struct env *env, struct value v)
 	return cdr(bind) = fun;
 }
 
-/*
- * Evaluates each expression in `list` and appends a string
- * representation of each to the global output string.
- */
-
-struct value
-builtin_print(struct env *env, struct value v)
-{
-	struct value r = eval_list(env, v);
-	if (r.type == VAL_ERROR) return r;
-
-	kdgu *out = kdgu_news("");
-
-	for (struct value p = r; p.type != VAL_NIL; p = cdr(p)) {
-		if (car(p).type == VAL_STRING) {
-			kdgu_append(out, string(car(p)));
-			continue;
-		}
-
-		struct value e = print_value(env, car(p));
-		if (e.type == VAL_ERROR) return e;
-		kdgu_append(out, string(e));
-	}
-
-	kdgu_append(env->birch->env->output, out);
-
-	struct value e = gc_alloc(env, VAL_STRING);
-	string(e) = out;
-
-	return e;
-}
-
 struct value
 builtin_set(struct env *env, struct value v)
 {
@@ -1032,7 +1000,6 @@ load_builtins(struct env *env)
 	add_builtin(env, "expand",  builtin_expand);
 	add_builtin(env, "length",  builtin_length);
 	add_builtin(env, "lambda",  builtin_fn);
-	add_builtin(env, "print",   builtin_print);
 	add_builtin(env, "progn",   builtin_progn);
 	add_builtin(env, "defmacro",builtin_macro);
 	add_builtin(env, "macro",   builtin_macro);

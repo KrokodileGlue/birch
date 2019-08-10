@@ -2,7 +2,7 @@
 (defq msg-hook '(sed-line command log-line))
 (defq join-hook '(init-log
 		  (lambda (serv chan)
-		    (print "Hello " chan "!"))))
+		    (append "Hello " chan "!"))))
 (defq trigger ",")
 (defq sed-regex "^\s*(?:(\w+):\s*)?s/(.*?)/(.*?)/(\w*)\s*$")
 (defq can-log t)
@@ -25,24 +25,28 @@
 (defun command (line)
   (let ((cmd nil)
 	(m nil)
-	(msg (nth line 2)))
+	(msg (nth line 2))
+	(output nil))
     (if (setq m (match (append "^" trigger "(.*)$") "" msg))
 	(setq cmd (nth m 1)))
     (if (and (not cmd) (setq m (match "^sudo\s+(.*)$" "" msg)))
 	(setq cmd (nth m 1)))
-    (if (not cmd)
-	(let ((i 0) (len (length msg)))
-	  (while (< len i)
-	    (if (string= (nth msg i) "$")
-		(progn
-		  (setq i (+ i 1))
-		  (print (eval (read-string (subseq msg i))))
-		  (setq can-log nil)))
-	    (setq i (+ i 1)))))
     (if cmd
 	(progn
-	  (print (eval (read-string (append "(" cmd ")"))))
-	  (setq can-log nil)))))
+	  (setq output (eval (read-string (append "(" cmd ")"))))
+	  (setq can-log nil)
+	  (if output output "nil"))
+      ;; (let ((i 0) (len (length msg)))
+      ;; 	(while (< len i)
+      ;; 	  (if (string= (nth msg i) "$")
+      ;; 	      (progn
+      ;; 		(setq i (+ i 1))
+      ;; 		(setq output (eval (read-string (subseq msg i))))
+      ;; 		(setq can-log nil)))
+      ;; 	  (setq i (+ i 1)))
+      ;; 	(if (not can-log)
+      ;; 	    (if output output "nil")))
+      )))
 (defun init-log (serv chan)
   (in (append serv "/" chan)
       if (not (boundp 'log))
@@ -58,7 +62,7 @@
     (setq node (cdr node)))
   result)
 (defun spongebob (x)
-  (sed "(.)(.)" "\l$1\u$2" "g" x))
+  (sed "(.)(.)" "\l\1\u\2" "g" x))
 (defmacro mock-user (nick &optional pattern)
   (defq subject
 	(if pattern
@@ -72,14 +76,15 @@
   (if result result
     (append "No matching message found for " nick ".")))
 (defun sed-line (line)
-  (defq re (match sed-regex "" (nth line 2)))
-  (if re
+  (let ((re (match sed-regex "" (nth line 2)))
+	(output nil))
+    (if re
       (progn
 	(defq nick
-	      (if (not (string= (nth re 1) ""))
-		  (nth re 1)
-		nil))
-	(defq node (cdr log))
+	  (if (not (string= (nth re 1) ""))
+	      (nth re 1)
+	    nil))
+	(defq node log)
 	(defq m nil)
 	(while (and (not m) node)
 	  (setq m (match (nth re 2) (nth re 4) (nth (car node) 2)))
@@ -94,35 +99,41 @@
 				  (nth re 4)
 				  (nth (car node) 2)))
 		(if (string= (nth line 1) (nth (car node) 1))
-		    (print (nth line 1) " meant to say: " result)
-		  (print (nth line 1)
-			 " thinks "
-			 (nth (car node) 1)
-			 " meant to say: "
-			 result))))
+		    (setq output (append (nth line 1)
+					 " meant to say: "
+					 result))
+		  (setq output (append (nth line 1)
+				       " thinks "
+				       (nth (car node) 1)
+				       " meant to say: "
+				       result)))))
 	  (setq node (cdr node)))
 	(if (not m)
 	    (if nick
-		(print "No matching message found for "
-		       nick
-		       " in the last "
-		       (length log)
-		       " messages.")
-	      (print "No matching message found in the last "
-		     (length log)
-		     " messages."))))))
+		(setq output (append "No matching message found for "
+				     nick
+				     " in the last "
+				     (length log)
+				     " messages."))
+	      (setq output (append "No matching message found in the last "
+				   (length log)
+				   " messages."))))))
+    output))
 (defun log-line (line)
   (if can-log
       (setq log (cons line log)))
-  (setq can-log t))
+  (setq can-log t)
+  nil)
 (defun print-line (x)
   (append (nth x 0) " <" (nth x 1) "> " (nth x 2)))
 (defun ping () '"pong")
 (defun history ()
-  (defq node (reverse log))
-  (while node
-    (print (print-line (car node)) "\n")
-    (setq node (cdr node))))
+  (let ((node (reverse log))
+	(output ""))
+    (while node
+      (setq output (append output (print-line (car node)) "\n"))
+      (setq node (cdr node)))
+    output))
 (in "freenode/##c-offtopic" progn
     (defq trigger "\."))
 (in "kroknet/#test2" progn

@@ -8,6 +8,7 @@
 static int
 alloc(struct env *env)
 {
+	//printf("idx: %d\n", env->birch->env->idx);
 	return env->birch->env->idx++;
 }
 

@@ -313,3 +313,28 @@ birch_config(struct birch *b, const char *path)
 
 	return 0;
 }
+
+void
+send_value(struct birch *b,
+           struct env *env,
+           const char *server,
+           const char *channel,
+           struct value v)
+{
+	struct value print = v.type == VAL_STRING
+		? v : print_value(env, v);
+
+	/* TODO: This can only happen when the print itself fails. */
+	if (print.type == VAL_ERROR) return;
+
+	kdgu *thing = string(print);
+
+	/* TODO: Think about when this can happen. */
+	if (!thing || !thing->s) return;
+
+	char *buf = malloc(thing->len + 1);
+	memcpy(buf, thing->s, thing->len);
+	buf[thing->len] = 0;
+	birch_send(b, server, channel, true, "%s", buf);
+	free(buf);
+}
