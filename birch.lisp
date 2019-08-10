@@ -33,24 +33,32 @@
 	(setq cmd (nth m 1)))
     (if cmd
 	(progn
-	  (setq output (eval (read-string (append "(" cmd ")"))))
+	  (setq output
+		(eval ~(in (append (current-server)
+				   "/"
+				   (current-channel))
+			   eval (read-string (append "(" ,cmd ")")))))
 	  (setq can-log nil)
 	  (if output output "nil"))
-      ;; (let ((i 0) (len (length msg)))
-      ;; 	(while (< len i)
-      ;; 	  (if (string= (nth msg i) "$")
-      ;; 	      (progn
-      ;; 		(setq i (+ i 1))
-      ;; 		(setq output (eval (read-string (subseq msg i))))
-      ;; 		(setq can-log nil)))
-      ;; 	  (setq i (+ i 1)))
-      ;; 	(if (not can-log)
-      ;; 	    (if output output "nil")))
+      (let ((i 0) (len (length msg)))
+      	(while (< len i)
+      	  (if (string= (nth msg i) "$")
+      	      (progn
+      		(setq i (+ i 1))
+      		(setq output
+		      (eval ~(in (append (current-server)
+					 "/"
+					 (current-channel))
+				 eval (read-string ,(subseq msg i)))))
+      		(setq can-log nil)))
+      	  (setq i (+ i 1)))
+      	(if (not can-log)
+      	    (if output output "nil")))
       )))
 (defun init-log (serv chan)
   (in (append serv "/" chan)
       if (not (boundp 'log))
-	  (defq log nil)))
+      (defq log nil)))
 (defun find-message (nick pattern)
   (defq node log)
   (defq m nil)
@@ -65,9 +73,9 @@
   (sed "(.)(.)" "\l\1\u\2" "g" x))
 (defmacro mock-user (nick &optional pattern)
   (defq subject
-	(if pattern
-	    (find-message (append nick) pattern)
-	  (find-message (append nick) "")))
+    (if pattern
+	(find-message (append nick) pattern)
+      (find-message (append nick) "")))
   (if subject (spongebob subject)))
 (defmacro mock (&optional nick pattern)
   (if (not nick)
@@ -79,45 +87,45 @@
   (let ((re (match sed-regex "" (nth line 2)))
 	(output nil))
     (if re
-      (progn
-	(defq nick
-	  (if (not (string= (nth re 1) ""))
-	      (nth re 1)
-	    nil))
-	(defq node log)
-	(defq m nil)
-	(while (and (not m) node)
-	  (setq m (match (nth re 2) (nth re 4) (nth (car node) 2)))
-	  (if (match sed-regex "" (nth (car node) 2))
-	      (setq m nil))
-	  (if (and nick (not (string= nick (nth (car node) 1))))
-	      (setq m nil))
-	  (if m
-	      (progn
-		(defq result (sed (nth re 2)
-				  (nth re 3)
-				  (nth re 4)
-				  (nth (car node) 2)))
-		(if (string= (nth line 1) (nth (car node) 1))
+	(progn
+	  (defq nick
+	    (if (not (string= (nth re 1) ""))
+		(nth re 1)
+	      nil))
+	  (defq node log)
+	  (defq m nil)
+	  (while (and (not m) node)
+	    (setq m (match (nth re 2) (nth re 4) (nth (car node) 2)))
+	    (if (match sed-regex "" (nth (car node) 2))
+		(setq m nil))
+	    (if (and nick (not (string= nick (nth (car node) 1))))
+		(setq m nil))
+	    (if m
+		(progn
+		  (defq result (sed (nth re 2)
+				    (nth re 3)
+				    (nth re 4)
+				    (nth (car node) 2)))
+		  (if (string= (nth line 1) (nth (car node) 1))
+		      (setq output (append (nth line 1)
+					   " meant to say: "
+					   result))
 		    (setq output (append (nth line 1)
+					 " thinks "
+					 (nth (car node) 1)
 					 " meant to say: "
-					 result))
-		  (setq output (append (nth line 1)
-				       " thinks "
-				       (nth (car node) 1)
-				       " meant to say: "
-				       result)))))
-	  (setq node (cdr node)))
-	(if (not m)
-	    (if nick
-		(setq output (append "No matching message found for "
-				     nick
-				     " in the last "
+					 result)))))
+	    (setq node (cdr node)))
+	  (if (not m)
+	      (if nick
+		  (setq output (append "No matching message found for "
+				       nick
+				       " in the last "
+				       (length log)
+				       " messages."))
+		(setq output (append "No matching message found in the last "
 				     (length log)
-				     " messages."))
-	      (setq output (append "No matching message found in the last "
-				   (length log)
-				   " messages."))))))
+				     " messages."))))))
     output))
 (defun log-line (line)
   (if can-log

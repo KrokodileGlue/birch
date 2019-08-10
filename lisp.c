@@ -26,11 +26,14 @@ void
 lisp_init(struct birch *b)
 {
 	add_builtin(b->env, "in", builtin_in);
-	add_builtin(b->env, "save", builtin_save);
 	add_builtin(b->env, "connect", builtin_connect);
 	add_builtin(b->env, "join", builtin_join);
 	add_builtin(b->env, "stdout", builtin_stdout);
 	add_builtin(b->env, "boundp", builtin_boundp);
+	add_builtin(b->env,
+	            "current-server", builtin_current_server);
+	add_builtin(b->env,
+	            "current-channel", builtin_current_channel);
 }
 
 static struct value

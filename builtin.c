@@ -228,93 +228,6 @@ builtin_join(struct env *env, struct value v)
 	return TRUE;
 }
 
-/*
- * TODO: Clean up these print functions.
- */
-
-static void
-print_thing3(FILE *f, struct env *env, struct value bind)
-{
-	/* TODO: This doesn't allow builtin aliases. */
-	if (cdr(bind).type == VAL_BUILTIN) return;
-
-	if (cdr(bind).type != VAL_FUNCTION) {
-		fprintf(f, "(setq %s '%s)\n",
-		        tostring(string(car(bind))),
-		        tostring(string(print_value(env, cdr(bind)))));
-		return;
-	}
-
-	/* TODO: Should this be handled in `print_value`? */
-	fprintf(f, "(defun %s (", tostring(name(cdr(bind))));
-
-	for (struct value i = param(cdr(bind));
-	     i.type != VAL_NIL;
-	     i = cdr(i)) {
-		fprintf(f, "%s ", tostring(string(car(i))));
-	}
-
-	fprintf(f, ") ");
-
-	for (struct value i = body(cdr(bind));
-	     i.type != VAL_NIL;
-	     i = cdr(i)) {
-		fprintf(f, "%s ", tostring(string(print_value(env, car(i)))));
-	}
-
-	fprintf(f, ")\n");
-}
-
-static void
-print_thing2(FILE *f, struct env *env)
-{
-	struct env *env2 = env;
-
-	for (struct value v = env->birch->env->vars;
-	     v.type != VAL_NIL;
-	     v = cdr(v)) {
-		struct env *env = env2->birch->env;
-		struct value bind = car(v);
-		print_thing3(f, env, bind);
-	}
-
-	/* For each channel... */
-	for (struct list *list = env->birch->channel;
-	     list;
-	     list = list->next) {
-		struct env *e = list->data;
-		if (!strcmp(e->channel, "global"))
-			fprintf(f, "(in \"%s\" progn\n", e->server);
-		else
-			fprintf(f, "(in \"%s/%s\" progn\n", e->server, e->channel);
-		for (struct value v = e->vars;
-		     v.type != VAL_NIL;
-		     v = cdr(v)) {
-			struct value bind = car(v);
-			print_thing3(f, env, bind);
-		}
-		fprintf(f, ")\n");
-	}
-}
-
-struct value
-builtin_save(struct env *env, struct value v)
-{
-	if (v.type != VAL_NIL)
-		return error(env, "`save' takes no arguments");
-
-	const char *config_file = "birch.lisp";
-	FILE *f = fopen(config_file, "w");
-
-	if (!f) return quickstring(env, "Output file could not"
-	                           " be opened for writing.");
-
-	print_thing2(f, env);
-	fclose(f);
-
-	return quickstring(env, "Saved.");
-}
-
 struct value
 builtin_boundp(struct env *env, struct value v)
 {
@@ -327,4 +240,16 @@ builtin_boundp(struct env *env, struct value v)
 		return error(env, "argument to `boundp'"
 		             " must be a symbol");
 	return find(env, v).type == VAL_NIL ? NIL : TRUE;
+}
+
+struct value
+builtin_current_server(struct env *env, struct value v)
+{
+	return quickstring(env, env->server);
+}
+
+struct value
+builtin_current_channel(struct env *env, struct value v)
+{
+	return quickstring(env, env->channel);
 }
