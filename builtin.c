@@ -69,7 +69,6 @@ builtin_in(struct env *env, struct value v)
 		      " descriptor in call to `in'");
 
 	const char *server = tok[0];
-	const char *channel = tok[1];
 
 	if (len == 1 && !strcmp(server, "global"))
 		return eval(env->birch->env, cdr(v));
@@ -79,6 +78,8 @@ builtin_in(struct env *env, struct value v)
 		                          server,
 		                          "global"),
 		            cdr(v));
+
+	const char *channel = tok[1];
 
 	if (!strlen(channel) || *channel != '#')
 		return error(env, "channel descriptor in call"

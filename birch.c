@@ -226,7 +226,7 @@ birch_get_env(struct birch *b,
               const char *server,
               const char *channel)
 {
-	if (!strcmp(server, "global") || *channel != '#')
+	if (!strcmp(server, "global"))
 		return b->env;
 
 	struct channel {

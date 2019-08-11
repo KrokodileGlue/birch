@@ -306,7 +306,7 @@ new_environment(struct birch *b,
 	env->birch = b;
 	env->vars = NIL;
 	env->server = strdup(server);
-	env->server = strdup(channel);
+	env->channel = strdup(channel);
 
 	/* Initialize garbage-collected objects. */
 	env->obj = malloc(GC_MAX_OBJECT * sizeof *env->obj);
