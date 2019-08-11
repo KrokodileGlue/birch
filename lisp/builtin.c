@@ -1044,6 +1044,24 @@ builtin_eq(struct env *env, struct value v)
 	return TRUE;
 }
 
+/*
+ * TODO: Implement formatted strings.
+ */
+
+struct value
+builtin_error(struct env *env, struct value v)
+{
+	if (list_length(env, v).integer != 1)
+		return error(env, "builtin `error' takes"
+		             " one argument");
+	v = eval_list(env, v);
+	if (v.type == VAL_ERROR) return v;
+	if (car(v).type != VAL_STRING)
+		return error(env, "argument to `error'"
+		             " must be a string");
+	return error(env, tostring(string(car(v))));
+}
+
 void
 load_builtins(struct env *env)
 {
@@ -1058,6 +1076,7 @@ load_builtins(struct env *env)
 	add_builtin(env, "expand",  builtin_expand);
 	add_builtin(env, "length",  builtin_length);
 	add_builtin(env, "lambda",  builtin_fn);
+	add_builtin(env, "error",   builtin_error);
 	add_builtin(env, "progn",   builtin_progn);
 	add_builtin(env, "defmacro",builtin_macro);
 	add_builtin(env, "macro",   builtin_macro);
