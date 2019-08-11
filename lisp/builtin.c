@@ -318,7 +318,7 @@ builtin_div(struct env *env, struct value list)
 }
 
 struct value
-builtin_eq(struct env *env, struct value list)
+builtin_inteq(struct env *env, struct value list)
 {
 	int sum = 0, first = 1;
 
@@ -1015,6 +1015,35 @@ builtin_subseq(struct env *env, struct value v)
 	return ret;
 }
 
+struct value
+builtin_eq(struct env *env, struct value v)
+{
+	if (v.type == VAL_NIL)
+		return error(env, "builtin `eq' requires arguments");
+
+	v = eval_list(env, v);
+
+	if (v.type == VAL_ERROR)
+		return v;
+
+	/*
+	 * Use the first value as the reference value for comparison
+	 * against the rest of the list.
+	 */
+	struct value ref = car(v);
+
+	for (struct value i = cdr(v); i.type != VAL_NIL; i = cdr(i)) {
+		struct value cmp = car(i);
+		if (ref.type != cmp.type) return NIL;
+		if (ref.type == VAL_INT && ref.integer != cmp.integer)
+			return NIL;
+		else if (ref.obj != cmp.obj)
+			return NIL;
+	}
+
+	return TRUE;
+}
+
 void
 load_builtins(struct env *env)
 {
@@ -1046,12 +1075,13 @@ load_builtins(struct env *env)
 	add_builtin(env, "cdr",     builtin_cdr);
 	add_builtin(env, "defun",   builtin_fn);
 	add_builtin(env, "fn",      builtin_fn);
+	add_builtin(env, "eq",      builtin_eq);
 	add_builtin(env, "if",      builtin_if);
 	add_builtin(env, "+",       builtin_add);
 	add_builtin(env, "-",       builtin_sub);
 	add_builtin(env, "*",       builtin_mul);
 	add_builtin(env, "/",       builtin_div);
-	add_builtin(env, "=",       builtin_eq);
+	add_builtin(env, "=",       builtin_inteq);
 	add_builtin(env, "<",       builtin_less);
 	add_builtin(env, "sed",     builtin_sed);
 	add_builtin(env, "and",     builtin_and);
