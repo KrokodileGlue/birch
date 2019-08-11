@@ -1,8 +1,13 @@
 #include <string.h>
 #include <assert.h>
+
 #include <kdg/kdgu.h>
 
+#include <stdbool.h>
+#include "../birch.h"
+
 #include "../util.h"
+
 #include "lex.h"
 #include "lisp.h"
 #include "error.h"
@@ -223,9 +228,23 @@ eval(struct env *env, struct value v)
 
 	case VAL_SYMBOL: {
 		struct value bind = find(env, v);
-		if (bind.type != VAL_NIL) return cdr(bind);
-		return error(env, "evaluation of unbound symbol `%s'",
-		             tostring(string(v)));
+
+		if (bind.type == VAL_NIL)
+			return error(env, "evaluation of unbound symbol `%s'",
+			             tostring(string(v)));
+
+		/* TODO: This is dumb and slow. */
+		struct value symbol = make_symbol(env, "symbol-hook");
+		struct value hook = find(env, symbol);
+
+		if (hook.type != VAL_NIL && cdr(hook).type != VAL_NIL) {
+			struct env *newenv = push_env(env, NIL, NIL);
+			add_variable(newenv, symbol, NIL);
+			struct value call = cons(newenv, cdr(hook), cons(newenv, quote(newenv, bind), NIL));
+			return eval(newenv, call);
+		}
+
+		return cdr(bind);
 	}
 
 	/* This should never happen. */
