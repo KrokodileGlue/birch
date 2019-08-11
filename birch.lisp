@@ -34,27 +34,30 @@
     (if cmd
 	(progn
 	  (setq output
-		(eval ~(in (append (current-server)
-				   "/"
-				   (current-channel))
-			   eval (read-string (append "(" ,cmd ")")))))
+		(with-demoted-errors
+		    (eval ~(in (append (current-server)
+				       "/"
+				       (current-channel))
+			       eval (read-string (append "(" ,cmd ")"))))))
 	  (setq can-log nil)
-	  (if output output "nil"))
+	  (if output output "()"))
       (let ((i 0) (len (length msg)))
       	(while (< len i)
-      	  (if (string= (nth msg i) "$")
+      	  (if (string= (subseq msg i (+ i 2)) "$(")
       	      (progn
       		(setq i (+ i 1))
       		(setq output
-		      (eval ~(in (append (current-server)
-					 "/"
-					 (current-channel))
-				 eval (read-string ,(subseq msg i)))))
+		      (append (if output (append output ", ") "")
+			      (with-demoted-errors
+				  (eval ~(in (append (current-server)
+						     "/"
+						     (current-channel))
+					     eval (read-string ,(subseq msg i)))))))
       		(setq can-log nil)))
       	  (setq i (+ i 1)))
+	(if output (setq output (append (nth line 1) ": " output)))
       	(if (not can-log)
-      	    (if output output "nil")))
-      )))
+      	    (if output output "()"))))))
 (defun init-log (serv chan)
   (in (append serv "/" chan)
       if (not (boundp 'log))

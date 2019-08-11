@@ -739,9 +739,10 @@ builtin_expand(struct env *env, struct value v)
 struct value
 builtin_eval(struct env *env, struct value v)
 {
-	struct value ret = eval(env, eval(env, car(v)));
-	if (ret.type == VAL_ERROR) ret.type = VAL_STRING;
-	return ret;
+	if (list_length(env, v).integer != 1)
+		return error(env, "builtin `eval' takes"
+		             " one argument");
+	return eval(env, eval(env, car(v)));
 }
 
 struct value
@@ -761,6 +762,8 @@ builtin_read_string(struct env *env, struct value v)
 
 	struct lexer *lexer = new_lexer("*string*", s);
 	struct token *t = tok(lexer);
+
+	if (!t) return NIL;
 
 	if (t->type != '(')
 		return error(env, "builtin `read-string' expected"
@@ -799,6 +802,7 @@ struct value
 builtin_streq(struct env *env, struct value v)
 {
 	v = eval_list(env, v);
+	if (v.type == VAL_ERROR) return v;
 
 	for (struct value list = v;
 	     list.type != VAL_NIL;
@@ -807,6 +811,12 @@ builtin_streq(struct env *env, struct value v)
 
 		int type = car(list).type != VAL_STRING
 			? car(list).type : car(cdr(list)).type;
+
+		if (car(list).type == VAL_ERROR)
+			return car(list);
+
+		if (car(cdr(list)).type == VAL_ERROR)
+			return car(cdr(list));
 
 		if (type != VAL_STRING)
 			return error(env, "`string=' takes only"
@@ -1001,16 +1011,30 @@ builtin_subseq(struct env *env, struct value v)
 
 	if (len == 2) {
 		struct value ret = gc_alloc(env, VAL_STRING);
-		int a = car(cdr(v)).integer;
-		int b = kdgu_len(string(car(v)));
+		unsigned a = car(cdr(v)).integer;
+		unsigned b = string(car(v))->len;
+
 		string(ret) = kdgu_substr(string(car(v)), a, b);
+
+		if (!string(ret))
+			return error(env, "invalid arguments"
+			             " given to `subseq'");
+
 		return ret;
 	}
 
 	struct value ret = gc_alloc(env, VAL_STRING);
-	int a = car(cdr(v)).integer;
-	int b = car(cdr(cdr(v))).integer;
+	unsigned a = car(cdr(v)).integer;
+	unsigned b = car(cdr(cdr(v))).integer;
+
+	if (b > string(car(v))->len)
+		b = string(car(v))->len;
+
 	string(ret) = kdgu_substr(string(car(v)), a, b);
+
+	if (!string(ret))
+		return error(env, "invalid arguments"
+		             " given to `subseq'");
 
 	return ret;
 }
@@ -1062,9 +1086,20 @@ builtin_error(struct env *env, struct value v)
 	return error(env, tostring(string(car(v))));
 }
 
+struct value
+builtin_with_demoted_errors(struct env *env, struct value v)
+{
+	struct value ret = progn(env, v);
+	if (ret.type == VAL_ERROR) return print_value(env, ret);
+	return ret;
+}
+
 void
 load_builtins(struct env *env)
 {
+	add_builtin(env,
+	            "with-demoted-errors",
+	            builtin_with_demoted_errors);
 	add_builtin(env, "documentation", builtin_documentation);
 	add_builtin(env, "read-string", builtin_read_string);
 	add_builtin(env, "backtick", builtin_backtick);
