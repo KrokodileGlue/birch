@@ -91,7 +91,9 @@ tok(struct lexer *l)
 	const char *a = l->s + l->idx;
 	const char *b = a;
 
-	t->type = lex(&a, &b, l->e);
+	t->type = lex((const unsigned char **)&a,
+	              (const unsigned char **)&b,
+	              (const unsigned char *)l->e);
 	if (t->type == TOK_EOF) return free(t), NULL;
 	if (!b) return free(t), NULL;
 

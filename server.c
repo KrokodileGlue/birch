@@ -9,11 +9,10 @@
 
 #include <kdg/kdgu.h>
 
+#include "lisp/lisp.h"
 #include "birch.h"
 #include "server.h"
 #include "net.h"
-
-#include "lisp/lisp.h"
 
 struct server *
 server_new(struct birch *b,

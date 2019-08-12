@@ -1,8 +1,8 @@
 #include <kdg/kdgu.h>
 
+#include "lisp.h"
 #include "../birch.h"
 #include "lex.h"
-#include "lisp.h"
 #include "gc.h"
 
 static int

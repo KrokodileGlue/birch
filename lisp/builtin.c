@@ -4,11 +4,11 @@
 
 #include <kdg/kdgu.h>
 
+#include "lisp.h"
 #include "../birch.h"
 #include "../util.h"
 
 #include "lex.h"
-#include "lisp.h"
 #include "eval.h"
 #include "util.h"
 #include "error.h"
