@@ -1137,7 +1137,6 @@ builtin_boundp(struct env *env, struct value v)
 		return TRUE; \
 	}
 
-TYPE_PREDICATE(null,VAL_NULL)
 TYPE_PREDICATE(nil,VAL_NIL)
 TYPE_PREDICATE(int,VAL_INT)
 TYPE_PREDICATE(cell,VAL_CELL)
@@ -1195,7 +1194,6 @@ load_builtins(struct env *env)
 	add_builtin(env, "and",     builtin_and);
 	add_builtin(env, "append",  builtin_append);
 
-	add_builtin(env, "nullp",    builtin_nullp);
 	add_builtin(env, "nilp",     builtin_nilp);
 	add_builtin(env, "intp",     builtin_intp);
 	add_builtin(env, "cellp",    builtin_cellp);
