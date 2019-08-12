@@ -117,7 +117,7 @@ received from a server. Returns the result of the evaluation(s) or \
 nil, if there were no commands embedded within the line."
   (let ((msg (nth line 2))
 	(regex-match (match (append "^" trigger "(.*)$") "" msg))
-	(cmd (if regex-match (nth regex-match 1))))
+	(cmd (nth regex-match 1)))
     (if cmd
 	(let ((tmp (with-demoted-errors
 		       (read-string (append "(" cmd ")"))))
@@ -129,7 +129,8 @@ nil, if there were no commands embedded within the line."
 
       ;; There was no explicit command, but there might still be some
       ;; embedded Lisp.
-      (lispize-line msg))))
+      (cond (match "\$\(" "" msg)
+	    (lispize-line msg)))))
 
 (defun init-channel (serv chan)
   "Initialize all channel-specific structures in a specific channel. \
@@ -161,9 +162,7 @@ or nil if there was no matching message."
 
 	;; If the line matches PATTERN and line was said by NICK then
 	;; set `result' to the body of the line.
-	(if (and (if nick
-		     (string= (nth (car node) 1) nick)
-		   t)
+	(if (and (if nick (string= (nth (car node) 1) nick) t)
 		 regex-match)
 	    (setq result (nth (car node) 2))))
 
@@ -182,9 +181,7 @@ documentation."
       (let ((regex-match (match pattern
 				(if mode mode "")
 				(nth (car node) 2))))
-	(if (and (if nick
-		     (string= (nth (car node) 1) nick)
-		   t)
+	(if (and (if nick (string= (nth (car node) 1) nick) t)
 		 regex-match)
 	    (setq result (car node))))
       (setq node (cdr node)))
@@ -278,21 +275,17 @@ the pattern described by it."
 	(target (nth arguments 0))
 	(pattern (nth arguments 1))
 	(replacement (nth arguments 2))
-	(mode (nth arguments 3)))
+	(mode (nth arguments 3))
+	(subject (cond arguments (find-line target pattern mode))))
     (cond arguments
 	  (setq should-log nil)
-	  (let ((subject (find-line target pattern mode)))
-	    (if subject
-		(sed-output pattern replacement mode nick subject)
-	      (if target
-		  (append "No matching message found for "
-			  target
-			  " in the last "
-			  (length log)
-			  " messages.")
-		(append "No matching message found in the last "
-			(length log)
-			" messages.")))))))
+	  (if subject
+	      (sed-output pattern replacement mode nick subject)
+	    (if target
+		(append "No matching message found for " target
+			" in the last " (length log) " messages.")
+	      (append "No matching message found in the last "
+		      (length log) " messages."))))))
 
 (defun log-line (line)
   (if should-log
