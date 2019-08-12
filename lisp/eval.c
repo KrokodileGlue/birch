@@ -3,9 +3,6 @@
 
 #include <kdg/kdgu.h>
 
-#include <stdbool.h>
-#include "../birch.h"
-
 #include "../util.h"
 
 #include "lex.h"

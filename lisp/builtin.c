@@ -370,6 +370,18 @@ builtin_less(struct env *env, struct value v)
 }
 
 struct value
+builtin_cond(struct env *env, struct value v)
+{
+	if (list_length(env, v).integer < 0)
+		return error(env, "builtin `cond' requires arguments");
+
+	struct value cond = eval(env, car(v));
+	if (cond.type == VAL_ERROR) return cond;
+	if (cond.type == VAL_NIL) return NIL;
+	return progn(env, cdr(v));
+}
+
+struct value
 builtin_if(struct env *env, struct value v)
 {
 	if (v.type == VAL_NIL)
@@ -503,22 +515,20 @@ builtin_let(struct env *env, struct value v)
 		return error(env, "first argument to `let' must"
 		             " be an initializer list");
 
+	struct env *newenv = push_env(env, NIL, NIL);
+
 	for (struct value i = car(v); i.type != VAL_NIL; i = cdr(i)) {
-		if (car(i).type == VAL_SYMBOL) {
-			add_variable(env, car(car(i)), NIL);
-			continue;
-		}
-
 		if (car(i).type != VAL_CELL)
-			return error(env, "invalid initializer in `let'");
+			return error(env, "invalid initializer"
+			             " in `let'");
 
-		struct value val = eval(env, car(cdr(car(i))));
+		struct value val = eval(newenv, car(cdr(car(i))));
 		if (val.type == VAL_ERROR) return val;
 
-		add_variable(env, car(car(i)), val);
+		add_variable(newenv, car(car(i)), val);
 	}
 
-	return progn(env, cdr(v));
+	return progn(newenv, cdr(v));
 }
 
 struct value
@@ -745,6 +755,14 @@ builtin_eval(struct env *env, struct value v)
 	return eval(env, eval(env, car(v)));
 }
 
+static struct value
+quickstring(struct env *env, const char *str)
+{
+	struct value v = gc_alloc(env, VAL_STRING);
+	string(v) = kdgu_news(str);
+	return v;
+}
+
 struct value
 builtin_read_string(struct env *env, struct value v)
 {
@@ -770,7 +788,12 @@ builtin_read_string(struct env *env, struct value v)
 		             " `(' to begin s-expression in"
 		             " string contents");
 
-	return parse(env, lexer);
+	struct value expr = parse(env, lexer);
+	if (expr.type == VAL_ERROR) return expr;
+
+	return cons(env,
+	            expr,
+	            quickstring(env, lexer->s + lexer->idx));
 }
 
 const char *help = "Birch is an IRC bot with a CL-like Lisp"
@@ -790,7 +813,7 @@ builtin_documentation(struct env *env, struct value v)
 
 	v = eval(env, car(v));
 	if (v.type == VAL_ERROR) return v;
-	if (v.type != VAL_FUNCTION)
+	if (v.type != VAL_FUNCTION && v.type != VAL_MACRO)
 		return error(env, "`documentation' requires a"
 		             " function argument");
 
@@ -1013,13 +1036,8 @@ builtin_subseq(struct env *env, struct value v)
 		struct value ret = gc_alloc(env, VAL_STRING);
 		unsigned a = car(cdr(v)).integer;
 		unsigned b = string(car(v))->len;
-
 		string(ret) = kdgu_substr(string(car(v)), a, b);
-
-		if (!string(ret))
-			return error(env, "invalid arguments"
-			             " given to `subseq'");
-
+		if (!string(ret)) string(ret) = kdgu_news("");
 		return ret;
 	}
 
@@ -1031,10 +1049,7 @@ builtin_subseq(struct env *env, struct value v)
 		b = string(car(v))->len;
 
 	string(ret) = kdgu_substr(string(car(v)), a, b);
-
-	if (!string(ret))
-		return error(env, "invalid arguments"
-		             " given to `subseq'");
+	if (!string(ret)) string(ret) = kdgu_news("");
 
 	return ret;
 }
@@ -1094,6 +1109,30 @@ builtin_with_demoted_errors(struct env *env, struct value v)
 	return ret;
 }
 
+#define TYPE_PREDICATE(X,Y)	  \
+	struct value \
+	builtin_ ## X ## p(struct env *env, struct value v) \
+	{ \
+		v = eval_list(env, v); \
+		if (v.type == VAL_ERROR) return v; \
+		for (struct value i = v; \
+		     i.type != VAL_NIL; \
+		     i = cdr(i)) \
+			if (car(i).type != Y) \
+				return NIL; \
+		return TRUE; \
+	}
+
+TYPE_PREDICATE(null,VAL_NULL)
+TYPE_PREDICATE(nil,VAL_NIL)
+TYPE_PREDICATE(int,VAL_INT)
+TYPE_PREDICATE(cell,VAL_CELL)
+TYPE_PREDICATE(string,VAL_STRING)
+TYPE_PREDICATE(symbol,VAL_SYMBOL)
+TYPE_PREDICATE(builtin,VAL_BUILTIN)
+TYPE_PREDICATE(function,VAL_FUNCTION)
+TYPE_PREDICATE(macro,VAL_MACRO)
+
 void
 load_builtins(struct env *env)
 {
@@ -1118,6 +1157,7 @@ load_builtins(struct env *env)
 	add_builtin(env, "while",   builtin_while);
 	add_builtin(env, "quote",   builtin_quote);
 	add_builtin(env, "match",   builtin_match);
+	add_builtin(env, "cond",    builtin_cond);
 	add_builtin(env, "list",    builtin_list);
 	add_builtin(env, "cons",    builtin_cons);
 	add_builtin(env, "eval",    builtin_eval);
@@ -1140,4 +1180,14 @@ load_builtins(struct env *env)
 	add_builtin(env, "sed",     builtin_sed);
 	add_builtin(env, "and",     builtin_and);
 	add_builtin(env, "append",  builtin_append);
+
+	add_builtin(env, "nullp",    builtin_nullp);
+	add_builtin(env, "nilp",     builtin_nilp);
+	add_builtin(env, "intp",     builtin_intp);
+	add_builtin(env, "cellp",    builtin_cellp);
+	add_builtin(env, "stringp",  builtin_stringp);
+	add_builtin(env, "symbolp",  builtin_symbolp);
+	add_builtin(env, "builtinp", builtin_builtinp);
+	add_builtin(env, "functionp", builtin_functionp);
+	add_builtin(env, "macrop",   builtin_macrop);
 }
