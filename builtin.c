@@ -230,20 +230,6 @@ builtin_join(struct env *env, struct value v)
 }
 
 struct value
-builtin_boundp(struct env *env, struct value v)
-{
-	if (list_length(env, v).integer != 1)
-		return error(env, "builtin `boundp'"
-		             " takes one argument");
-	v = eval(env, car(v));
-	if (v.type == VAL_ERROR) return v;
-	if (v.type != VAL_SYMBOL)
-		return error(env, "argument to `boundp'"
-		             " must be a symbol");
-	return find(env, v).type == VAL_NIL ? NIL : TRUE;
-}
-
-struct value
 builtin_current_server(struct env *env, struct value v)
 {
 	return quickstring(env, env->server);
