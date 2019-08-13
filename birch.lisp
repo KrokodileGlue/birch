@@ -10,6 +10,15 @@
 		  (lambda (serv chan)
 		    (append "Hello " chan "!"))))
 
+(defun symbol-protector (bind)
+  (if (or (match "-hook$" "" (append (car bind)))
+	  (string= (append (car bind)) "parse-sed"))
+      (error (append "you aren't powerful enough to use `"
+		     (car bind) "'"))
+    (cdr bind)))
+
+(defq symbol-hook symbol-protector)
+
 ;; Initialize global variables.
 
 (defq trigger ",")
@@ -37,17 +46,9 @@
 (defun get-nick (line) (nth line 1))
 (defun get-body (line) (nth line 2))
 
-(defun birch-eval (expr)
-  "Evaluates the potentially unsafe EXPR with protections enabled. \
-Returns the evaluation of EXPR if all goes well. If an error is \
-encountered, returns a string representation of that error."
-  (with-demoted-errors
-      (eval ~(in (append (current-server) "/" (current-channel))
-		 ,@expr))))
-
 (defun lispize-line (input)
-  "Returns the expanded form of a message that contains embedded Lisp\
- commands, or nil if it does not contain any embedded Lisp."
+  "Returns the expanded form of a message that contains embedded \
+Lisp commands, or nil if it does not contain any embedded Lisp."
   (let ((idx 0)				; Current position in `input'.
 	(len (length input))		; Length of the input.
 	(output nil))			; Accumulated output.
@@ -117,6 +118,8 @@ received from a server. Returns the result of the evaluation(s) or \
 nil, if there were no commands embedded within the line."
   (let ((msg (nth line 2))
 	(regex-match (match (append "^" trigger "(.*)$") "" msg))
+	(regex-match (if regex-match regex-match
+		       (match "^sudo\s+(.*)$" "" msg)))
 	(cmd (nth regex-match 1)))
     (if cmd
 	(let ((tmp (with-demoted-errors
@@ -125,7 +128,10 @@ nil, if there were no commands embedded within the line."
 			  tmp
 			(birch-eval (car tmp)))))
 	  (setq should-log nil)
-	  (if output output "()"))
+	  (if (and (not (stringp tmp))
+		   (not (string= (cdr tmp) "")))
+	      (append "error: trailing text in command: " (cdr tmp))
+	    (if output output "()")))
 
       ;; There was no explicit command, but there might still be some
       ;; embedded Lisp.

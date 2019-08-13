@@ -16,6 +16,14 @@
 #include "parse.h"
 #include "gc.h"
 
+#define PROTECT_SYMBOL(X)	  \
+	do { \
+		struct value val = eval(env, (X)); \
+		if (val.type == VAL_ERROR \
+		    && find(env, (X)).type != VAL_NIL) \
+			return val; \
+	} while (0)
+
 static struct value
 append(struct env *env, struct value list, struct value v)
 {
@@ -172,6 +180,7 @@ builtin_fn(struct env *env, struct value v)
 		return make_function(env, v, VAL_FUNCTION);
 
 	struct value sym = car(v);
+	PROTECT_SYMBOL(sym);
 
 	/*
 	 * Otherwise it's obviously a named function which should be
@@ -197,6 +206,7 @@ builtin_set(struct env *env, struct value v)
 		return error(env, "`set' requires two arguments");
 
 	struct value sym = eval(env, car(v));
+	PROTECT_SYMBOL(sym);
 
 	if (sym.type == VAL_ERROR)
 		return sym;
@@ -225,6 +235,7 @@ builtin_def(struct env *env, struct value v)
 		return error(env, "`def' requires two arguments");
 
 	struct value sym = eval(env, car(v));
+	PROTECT_SYMBOL(sym);
 
 	if (sym.type == VAL_ERROR)
 		return sym;
@@ -465,6 +476,8 @@ builtin_macro(struct env *env, struct value v)
 		return error(env, "missing list of parameters");
 
 	struct value fun = make_function(env, cdr(v), VAL_MACRO);
+	struct value sym = car(v);
+	PROTECT_SYMBOL(sym);
 	if (fun.type == VAL_ERROR) return fun;
 	name(fun) = kdgu_copy(string(car(v)));
 
@@ -522,10 +535,11 @@ builtin_let(struct env *env, struct value v)
 			return error(env, "invalid initializer"
 			             " in `let'");
 
+		struct value sym = car(car(i));
 		struct value val = eval(newenv, car(cdr(car(i))));
+		PROTECT_SYMBOL(sym);
 		if (val.type == VAL_ERROR) return val;
-
-		add_variable(newenv, car(car(i)), val);
+		add_variable(newenv, sym, val);
 	}
 
 	return progn(newenv, cdr(v));
@@ -971,18 +985,6 @@ builtin_backtick(struct env *env, struct value v)
 }
 
 struct value
-builtin_or(struct env *env, struct value v)
-{
-	for (struct value i = v; i.type != VAL_NIL; i = cdr(i)) {
-		struct value val = eval(env, car(v));
-		if (val.type == VAL_ERROR) return val;
-		if (val.type == VAL_TRUE) return TRUE;
-	}
-
-	return NIL;
-}
-
-struct value
 builtin_and(struct env *env, struct value v)
 {
 	for (struct value i = v; i.type != VAL_NIL; i = cdr(i)) {
@@ -992,6 +994,18 @@ builtin_and(struct env *env, struct value v)
 	}
 
 	return TRUE;
+}
+
+struct value
+builtin_or(struct env *env, struct value v)
+{
+	for (struct value i = v; i.type != VAL_NIL; i = cdr(i)) {
+		struct value val = eval(env, car(i));
+		if (val.type == VAL_ERROR) return val;
+		if (val.type != VAL_NIL) return TRUE;
+	}
+
+	return NIL;
 }
 
 struct value
@@ -1192,6 +1206,7 @@ load_builtins(struct env *env)
 	add_builtin(env, "<",       builtin_less);
 	add_builtin(env, "sed",     builtin_sed);
 	add_builtin(env, "and",     builtin_and);
+	add_builtin(env, "or",      builtin_or);
 	add_builtin(env, "append",  builtin_append);
 
 	add_builtin(env, "nilp",     builtin_nilp);

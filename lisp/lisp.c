@@ -307,6 +307,7 @@ new_environment(struct birch *b,
 	env->vars = NIL;
 	env->server = strdup(server);
 	env->channel = strdup(channel);
+	env->protect = false;
 
 	/* Initialize garbage-collected objects. */
 	env->obj = malloc(GC_MAX_OBJECT * sizeof *env->obj);
@@ -335,6 +336,7 @@ make_env(struct env *env, struct value map)
 	r->channel = env->channel;
 	r->birch = env->birch;
 	r->obj = env->obj;
+	r->protect = env->protect;
 	r->vars = map;
 	r->up = env;
 

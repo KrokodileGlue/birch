@@ -230,6 +230,8 @@ eval(struct env *env, struct value v)
 			return error(env, "evaluation of unbound symbol `%s'",
 			             tostring(string(v)));
 
+		if (!env->protect) return cdr(bind);
+
 		/* TODO: This is dumb and slow. */
 		struct value symbol = make_symbol(env, "symbol-hook");
 		struct value hook = find(env, symbol);
@@ -237,7 +239,11 @@ eval(struct env *env, struct value v)
 		if (hook.type != VAL_NIL && cdr(hook).type != VAL_NIL) {
 			struct env *newenv = push_env(env, NIL, NIL);
 			add_variable(newenv, symbol, NIL);
-			struct value call = cons(newenv, cdr(hook), cons(newenv, quote(newenv, bind), NIL));
+			struct value call = cons(newenv,
+			                         cdr(hook),
+			                         cons(newenv,
+			                              quote(newenv, bind),
+			                              NIL));
 			return eval(newenv, call);
 		}
 

@@ -54,6 +54,7 @@ struct env {
 	struct object *obj;
 
 	int idx;
+	bool protect;
 };
 
 struct env *new_environment(struct birch *b,

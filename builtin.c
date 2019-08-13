@@ -240,3 +240,18 @@ builtin_current_channel(struct env *env, struct value v)
 {
 	return quickstring(env, env->channel);
 }
+
+struct value
+builtin_birch_eval(struct env *env, struct value v)
+{
+	if (list_length(env, v).integer != 1)
+		return error(env, "builtin `birch-eval'"
+		             " takes one argument");
+	if (env->protect) return NIL;
+	struct value arg = eval(env, car(v));
+	env->protect = true;
+	struct value val = eval(env, arg);
+	env->protect = false;
+	if (val.type == VAL_ERROR) return print_value(env, val);
+	return val;
+}
