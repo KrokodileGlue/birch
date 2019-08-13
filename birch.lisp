@@ -23,6 +23,7 @@
 
 (defq trigger ",")
 (defq should-log t)
+(defq recursion-limit 256)
 
 (defun init ()
   "Prepare the bot for the main I/O loop."

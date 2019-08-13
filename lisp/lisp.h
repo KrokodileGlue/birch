@@ -54,7 +54,11 @@ struct env {
 	struct object *obj;
 
 	int idx;
+
+	/* Security. */
 	bool protect;
+	int recursion_limit;
+	int depth;
 };
 
 struct env *new_environment(struct birch *b,

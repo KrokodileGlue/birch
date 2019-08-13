@@ -282,7 +282,8 @@ load_macros(struct env *env)
 {
 	eval_string(env, "(defmacro null (x) ~(if ,x nil t))");
 	eval_string(env, "(defmacro not (x) ~(null ,x))");
-	eval_string(env, "(defmacro map (x y)\
+	eval_string(env, "\
+(defmacro map (x y)\
   ~(if (cdr ,y)\
        (cons (,x (car ,y)) (map ,x (cdr ,y)))\
      (cons (,x (car ,y)) nil)))");
@@ -308,6 +309,8 @@ new_environment(struct birch *b,
 	env->server = strdup(server);
 	env->channel = strdup(channel);
 	env->protect = false;
+	env->recursion_limit = -1;
+	env->depth = 0;
 
 	/* Initialize garbage-collected objects. */
 	env->obj = malloc(GC_MAX_OBJECT * sizeof *env->obj);
@@ -331,15 +334,9 @@ struct env *
 make_env(struct env *env, struct value map)
 {
 	struct env *r = malloc(sizeof *r);
-
-	r->server = env->server;
-	r->channel = env->channel;
-	r->birch = env->birch;
-	r->obj = env->obj;
-	r->protect = env->protect;
+	memcpy(r, env, sizeof *r);
 	r->vars = map;
 	r->up = env;
-
 	return r;
 }
 

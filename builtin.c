@@ -250,8 +250,14 @@ builtin_birch_eval(struct env *env, struct value v)
 	if (env->protect) return NIL;
 	struct value arg = eval(env, car(v));
 	env->protect = true;
+	struct value limit =
+		find(env, make_symbol(env, "recursion-limit"));
+	env = birch_get_env(env->birch, env->server, env->channel);
+	if (limit.type != VAL_NIL && cdr(limit).type == VAL_INT)
+		env->recursion_limit = cdr(limit).integer;
 	struct value val = eval(env, arg);
 	env->protect = false;
+	env->recursion_limit = -1;
 	if (val.type == VAL_ERROR) return print_value(env, val);
 	return val;
 }

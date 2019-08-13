@@ -709,6 +709,7 @@ builtin_match(struct env *env, struct value v)
 		             " three arguments");
 
 	v = eval_list(env, v);
+	if (v.type == VAL_ERROR) return v;
 
 	if (car(v).type != VAL_STRING
 	    || car(cdr(v)).type != VAL_STRING

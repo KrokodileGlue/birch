@@ -3,10 +3,12 @@
 
 #include <kdg/kdgu.h>
 
+#include "lisp.h"
+
+#include "../birch.h"
 #include "../util.h"
 
 #include "lex.h"
-#include "lisp.h"
 #include "error.h"
 #include "eval.h"
 #include "util.h"
@@ -186,6 +188,16 @@ eval_list(struct env *env, struct value list)
 struct value
 eval(struct env *env, struct value v)
 {
+	env->birch->env->depth++;
+
+	if (env->recursion_limit > 0
+	    && env->birch->env->depth >= env->recursion_limit) {
+		env->birch->env->depth--;
+		return error(env, "s-expression too complicated");
+	}
+
+	struct value ret = NIL;
+
 	switch (v.type) {
 	/*
 	 * These are values that don't require any further
@@ -197,11 +209,12 @@ eval(struct env *env, struct value v)
 	case VAL_ERROR:   case VAL_TRUE:
 	case VAL_NIL:     case VAL_KEYWORD:
 	case VAL_KEYWORDPARAM:
-		return v;
+		ret = v;
+		break;
 
 	case VAL_COMMA: case VAL_COMMAT:
-		return error(env, "stray comma outside of"
-		             " backtick expression");
+		ret = error(env, "stray comma outside of"
+		            " backtick expression");
 		break;
 
 	/*
@@ -211,11 +224,22 @@ eval(struct env *env, struct value v)
 
 	case VAL_CELL: {
 		struct value expanded = expand(env, v);
-		if (expanded.obj != v.obj) return eval(env, expanded);
+
+		if (expanded.obj != v.obj) {
+			ret = eval(env, expanded);
+			break;
+		}
+
 		struct value fn = eval(env, car(v));
 		struct value args = cdr(v);
-		if (fn.type == VAL_ERROR) return fn;
-		return apply(env, fn, args);
+
+		if (fn.type == VAL_ERROR) {
+			ret = fn;
+			break;
+		}
+
+		ret = apply(env, fn, args);
+		break;
 	}
 
 	/*
@@ -226,11 +250,16 @@ eval(struct env *env, struct value v)
 	case VAL_SYMBOL: {
 		struct value bind = find(env, v);
 
-		if (bind.type == VAL_NIL)
-			return error(env, "evaluation of unbound symbol `%s'",
-			             tostring(string(v)));
+		if (bind.type == VAL_NIL) {
+			ret = error(env, "evaluation of unbound symbol `%s'",
+			            tostring(string(v)));
+			break;
+		}
 
-		if (!env->protect) return cdr(bind);
+		if (!env->protect) {
+			ret = cdr(bind);
+			break;
+		}
 
 		/* TODO: This is dumb and slow. */
 		struct value symbol = make_symbol(env, "symbol-hook");
@@ -244,20 +273,23 @@ eval(struct env *env, struct value v)
 			                         cons(newenv,
 			                              quote(newenv, bind),
 			                              NIL));
-			return eval(newenv, call);
+			ret = eval(newenv, call);
+			break;
 		}
 
-		return cdr(bind);
+		ret = cdr(bind);
+		break;
 	}
 
 	/* This should never happen. */
 
 	default:
-		return error(env, "bug: unimplemented evaluator");
+		ret = error(env, "bug: unimplemented evaluator");
 	}
 
-	return error(env, "bug: unreachable: "
-	             __FILE__ ":%d", __LINE__);
+	env->birch->env->depth--;
+
+	return ret;
 }
 
 struct value
