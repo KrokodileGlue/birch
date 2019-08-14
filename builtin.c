@@ -217,10 +217,9 @@ builtin_join(struct env *env, struct value v)
 			               NIL)));
 		struct value res = eval(env, call);
 		if (res.type == VAL_ERROR) {
-			puts("error in join-hook:");
-			puts(tostring(string(res)));
-			puts("in:");
-			puts(tostring(string(print_value(env, call))));
+			printf("error in join-hook: %s\nin: %s\n",
+			       tostring(string(res)),
+			       tostring(string(print_value(env, call))));
 		} else if (res.type != VAL_NIL) {
 			send_value(env->birch, env, serv, chan, res);
 		}
@@ -247,17 +246,16 @@ builtin_birch_eval(struct env *env, struct value v)
 	if (list_length(env, v).integer != 1)
 		return error(env, "builtin `birch-eval'"
 		             " takes one argument");
-	if (env->protect) return NIL;
 	struct value arg = eval(env, car(v));
-	env->protect = true;
 	struct value limit =
 		find(env, make_symbol(env, "recursion-limit"));
 	env = birch_get_env(env->birch, env->server, env->channel);
+	env->birch->env->protect = true;
 	if (limit.type != VAL_NIL && cdr(limit).type == VAL_INT)
-		env->recursion_limit = cdr(limit).integer;
+		env->birch->env->recursion_limit = cdr(limit).integer;
 	struct value val = eval(env, arg);
-	env->protect = false;
-	env->recursion_limit = -1;
+	env->birch->env->protect = false;
+	env->birch->env->recursion_limit = -1;
 	if (val.type == VAL_ERROR) return print_value(env, val);
 	return val;
 }

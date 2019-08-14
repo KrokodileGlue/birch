@@ -190,8 +190,9 @@ eval(struct env *env, struct value v)
 {
 	env->birch->env->depth++;
 
-	if (env->recursion_limit > 0
-	    && env->birch->env->depth >= env->recursion_limit) {
+	if (env->birch->env->recursion_limit > 0
+	    && env->birch->env->depth
+	    >= env->birch->env->recursion_limit) {
 		env->birch->env->depth--;
 		return error(env, "s-expression too complicated");
 	}
@@ -248,32 +249,29 @@ eval(struct env *env, struct value v)
 	 */
 
 	case VAL_SYMBOL: {
+#define PROTECT_SYMBOL(X)	  \
+		if (kdgu_cmp(string(v), &KDGU(X), false, NULL)) { \
+			ret = error(env, "you aren't powerful" \
+			            " enough to use `%s'", (X)); \
+			break; \
+		}
+
+		if (env->birch->env->protect) {
+			PROTECT_SYMBOL("join-hook");
+			PROTECT_SYMBOL("msg-hook");
+			PROTECT_SYMBOL("connect");
+			PROTECT_SYMBOL("join");
+			PROTECT_SYMBOL("config-file");
+			PROTECT_SYMBOL("birch-eval");
+			PROTECT_SYMBOL("log");
+			PROTECT_SYMBOL("raw-log");
+		}
+
 		struct value bind = find(env, v);
 
 		if (bind.type == VAL_NIL) {
 			ret = error(env, "evaluation of unbound symbol `%s'",
 			            tostring(string(v)));
-			break;
-		}
-
-		if (!env->protect) {
-			ret = cdr(bind);
-			break;
-		}
-
-		/* TODO: This is dumb and slow. */
-		struct value symbol = make_symbol(env, "symbol-hook");
-		struct value hook = find(env, symbol);
-
-		if (hook.type != VAL_NIL && cdr(hook).type != VAL_NIL) {
-			struct env *newenv = push_env(env, NIL, NIL);
-			add_variable(newenv, symbol, NIL);
-			struct value call = cons(newenv,
-			                         cdr(hook),
-			                         cons(newenv,
-			                              quote(newenv, bind),
-			                              NIL));
-			ret = eval(newenv, call);
 			break;
 		}
 

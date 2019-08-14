@@ -20,7 +20,7 @@
 	do { \
 		struct value val = eval(env, (X)); \
 		if (val.type == VAL_ERROR \
-		    && find(env, (X)).type != VAL_NIL) \
+		    && !strncmp((char *)string(val)->s, "you", 3)) \
 			return val; \
 	} while (0)
 
@@ -206,10 +206,11 @@ builtin_set(struct env *env, struct value v)
 		return error(env, "`set' requires two arguments");
 
 	struct value sym = eval(env, car(v));
-	PROTECT_SYMBOL(sym);
 
 	if (sym.type == VAL_ERROR)
 		return sym;
+
+	PROTECT_SYMBOL(sym);
 
 	if (sym.type != VAL_SYMBOL)
 		return error(env, "the first argument to `set'"
@@ -235,10 +236,11 @@ builtin_def(struct env *env, struct value v)
 		return error(env, "`def' requires two arguments");
 
 	struct value sym = eval(env, car(v));
-	PROTECT_SYMBOL(sym);
 
 	if (sym.type == VAL_ERROR)
 		return sym;
+
+	PROTECT_SYMBOL(sym);
 
 	if (sym.type != VAL_SYMBOL)
 		return error(env, "the first argument to `def'"
@@ -256,7 +258,7 @@ builtin_defq(struct env *env, struct value v)
 
 	if (car(v).type != VAL_SYMBOL)
 		return error(env, "the first argument to `defq'"
-		             " must be an identifier");
+		             " must be a symbol");
 
 	return builtin_def(env, cons(env, quote(env, car(v)), cdr(v)));
 }
@@ -274,7 +276,7 @@ builtin_setq(struct env *env, struct value v)
 
 	if (car(v).type != VAL_SYMBOL)
 		return error(env, "the first argument to `setq'"
-		             " must be an identifier");
+		             " must be a symbol");
 
 	return builtin_set(env, cons(env, quote(env, car(v)), cdr(v)));
 }

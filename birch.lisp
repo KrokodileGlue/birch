@@ -10,20 +10,11 @@
 		  (lambda (serv chan)
 		    (append "Hello " chan "!"))))
 
-(defun symbol-protector (bind)
-  (if (or (match "-hook$" "" (append (car bind)))
-	  (string= (append (car bind)) "parse-sed"))
-      (error (append "you aren't powerful enough to use `"
-		     (car bind) "'"))
-    (cdr bind)))
-
-(defq symbol-hook symbol-protector)
-
 ;; Initialize global variables.
 
 (defq trigger ",")
 (defq should-log t)
-(defq recursion-limit 256)
+(defq recursion-limit 512)
 
 (defun init ()
   "Prepare the bot for the main I/O loop."
@@ -143,15 +134,14 @@ nil, if there were no commands embedded within the line."
   "Initialize all channel-specific structures in a specific channel. \
 Does not initialize anything that has already been initialized. SERV \
 and CHAN are the standard `join-hook' parameters."
-  (let ((channel (append serv "/" chan)))
-    (in channel progn
-	;; Define the `log' variable if it does not already exist.
-	(if (not (boundp 'log))
-	    (defq log nil))
+  (in (append serv "/" chan) progn
+      ;; Define the `log' variable if it does not already exist.
+      (if (not (boundp 'log))
+	  (defq log nil))
 
-	;; Define the `raw-log' variable if it does not already exist.
-	(if (not (boundp 'raw-log))
-	    (defq raw-log nil)))))
+      ;; Define the `raw-log' variable if it does not already exist.
+      (if (not (boundp 'raw-log))
+	  (defq raw-log nil))))
 
 (defun find-message (nick pattern &optional mode)
   "Find the last message in the current channel said by NICK that \
@@ -236,8 +226,8 @@ command in STRING then return nil, otherwise return a list \
 containing these elements in order: target user, regex, substitution \
 text, regex mode."
   (let ((regex-match
-	 (match "^\s*(?:(\S+)[[:punct:]])?\s*\
-s([[:punct:]\|])(.*\2.*)\2(\S*)\s*$"
+	 (match "^\s*(?:(\S+)\p{P})?\s*\
+s(\p{P}|\p{S})(.*\2.*)\2(\S*)\s*$"
 		""
 		string))
 	(target (nth regex-match 1))

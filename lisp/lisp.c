@@ -252,7 +252,10 @@ find(struct env *env, struct value sym)
 	     c.type != VAL_NIL;
 	     c = cdr(c)) {
 		struct value bind = car(c);
-		if (kdgu_cmp(string(sym), string(car(bind)), false, NULL))
+		if (kdgu_cmp(string(sym),
+		             string(car(bind)),
+		             false,
+		             NULL))
 			return bind;
 	}
 
