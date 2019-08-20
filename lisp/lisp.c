@@ -15,7 +15,6 @@
 #include "../util.h"
 
 const char **value_name = (const char *[]){
-	"null",
 	"nil",
 	"int",
 	"cell",
@@ -32,8 +31,8 @@ const char **value_name = (const char *[]){
 	"true",
 	"rparen",
 	"dot",
+	"eof",
 	"error",
-	"note",
 };
 
 struct value
@@ -92,8 +91,8 @@ print_value(struct env *env, struct value v)
 	case VAL_NIL:  out = kdgu_news("()");       break;
 	case VAL_MACRO:
 	case VAL_FUNCTION:
-		if (obj(v).name) {
-			kdgu *tmp = kdgu_copy(obj(v).name);
+		if (function(v).name) {
+			kdgu *tmp = kdgu_copy(function(v).name);
 			kdgu_uc(tmp);
 			kdgu_append(out, tmp);
 		} else
@@ -104,12 +103,12 @@ print_value(struct env *env, struct value v)
 		break;
 	case VAL_KEYWORD:
 		sprintf(buf, "&%.*s",
-		        string(obj(v).keyword)->len, string(obj(v).keyword)->s);
+		        string(keyword(v))->len, string(keyword(v))->s);
 		out = kdgu_news(buf);
 		break;
 	case VAL_KEYWORDPARAM:
 		sprintf(buf, ":%.*s",
-		        string(obj(v).keyword)->len, string(obj(v).keyword)->s);
+		        string(keyword(v))->len, string(keyword(v))->s);
 		out = kdgu_news(buf);
 		break;
 	case VAL_CELL:
@@ -140,9 +139,6 @@ print_value(struct env *env, struct value v)
 		break;
 	case VAL_ERROR:
 		kdgu_append(out, string(print_error(env, v)));
-		break;
-	case VAL_NULL:
-		kdgu_append(out, &KDGU("null"));
 		break;
 	default:
 		return error(env,
@@ -179,7 +175,6 @@ make_symbol(struct env *env, const char *s)
 	if (!strcmp(s, "t")) return TRUE;
 
 	struct value sym = gc_alloc(env, VAL_SYMBOL);
-	if (sym.type == VAL_NULL) return VNULL;
 	string(sym) = kdgu_news(s);
 
 	return sym;
@@ -199,9 +194,9 @@ expand(struct env *env, struct value v)
 	struct value fn = cdr(bind);
 	struct value args = cdr(v);
 
-	struct env *newenv = push_env(env, obj(fn).param, args);
+	struct env *newenv = push_env(env, function(fn).param, args);
 
-	for (struct value opt = obj(fn).optional;
+	for (struct value opt = function(fn).optional;
 	     opt.type != VAL_NIL;
 	     opt = cdr(opt)) {
 		struct value bind = find(newenv, car(car(opt)));
@@ -215,18 +210,18 @@ expand(struct env *env, struct value v)
 	}
 
 	if (rest(fn).type != VAL_NIL) {
-		struct value p = obj(fn).param, q = args;
+		struct value p = function(fn).param, q = args;
 
 		while (p.type != VAL_NIL) {
 			p = cdr(p), q = cdr(q);
 			if (q.type == VAL_NIL) break;
 		}
 
-		add_variable(newenv, obj(fn).rest,
+		add_variable(newenv, function(fn).rest,
 		             q.type != VAL_NIL ? q : NIL);
 	}
 
-	return progn(newenv, obj(fn).body);
+	return progn(newenv, function(fn).body);
 }
 
 /*
@@ -276,7 +271,7 @@ add_builtin(struct env *env, const char *name, builtin *f)
 	struct value sym = make_symbol(env, name);
 	struct value prim = gc_alloc(env, VAL_BUILTIN);
 	if (prim.type == VAL_NIL) return;
-	obj(prim).builtin = f;
+	builtin(prim) = f;
 	add_variable(env, sym, prim);
 }
 
@@ -307,6 +302,7 @@ new_environment(struct birch *b,
 
 	/* Initialize basic fields. */
 	env->up = NULL;    /* The global environment has no parent. */
+	env->gc = gc_new();
 	env->birch = b;
 	env->vars = NIL;
 	env->server = strdup(server);
@@ -314,11 +310,6 @@ new_environment(struct birch *b,
 	env->protect = false;
 	env->recursion_limit = -1;
 	env->depth = 0;
-
-	/* Initialize garbage-collected objects. */
-	env->obj = malloc(GC_MAX_OBJECT * sizeof *env->obj);
-	memset(env->obj, 0, GC_MAX_OBJECT * sizeof *env->obj);
-	env->idx = 0;
 	b->env = env;
 
 	/*

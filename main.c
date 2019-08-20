@@ -8,6 +8,7 @@
 #include <pthread.h>
 
 #include "lisp/lisp.h"
+
 #include "birch.h"
 #include "server.h"
 #include "list.h"

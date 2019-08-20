@@ -1,6 +1,5 @@
 struct value {
 	enum value_type {
-		VAL_NULL,
 		VAL_NIL,
 
 		VAL_INT,
@@ -22,10 +21,10 @@ struct value {
 		/* Dummies only used by the parser. */
 		VAL_RPAREN,
 		VAL_DOT,
+		VAL_EOF,
 
 		/* Hot potatoes. */
 		VAL_ERROR,
-		VAL_NOTE,
 	} type;
 
 	union {
@@ -53,7 +52,7 @@ struct env {
 	struct birch *birch;
 	struct object *obj;
 
-	int idx;
+	struct gc *gc;
 
 	/* Security. */
 	bool protect;
@@ -124,11 +123,11 @@ const char **value_name;
 #define RPAREN (struct value){VAL_RPAREN,{0}}
 #define NIL (struct value){VAL_NIL,{0}}
 #define TRUE (struct value){VAL_TRUE,{0}}
-#define VNULL (struct value){VAL_NULL,{0}}
+#define VEOF (struct value){VAL_EOF,{0}}
 
 /*
  * I think this reports the type as a character because in the parser
  * sometimes values actually represent characters. TODO?
  */
-#define TYPE_NAME(X) (X > VAL_NOTE ? (char []){X, 0} : value_name[X])
+#define TYPE_NAME(X) (X > VAL_ERROR ? (char []){X, 0} : value_name[X])
 #define IS_LIST(X) ((X).type == VAL_NIL || (X).type == VAL_CELL)

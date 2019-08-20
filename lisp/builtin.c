@@ -405,8 +405,8 @@ builtin_if(struct env *env, struct value v)
 
 	struct value cond = eval(env, car(v));
 
-	if (cond.type == VAL_NULL) return VNULL;
-	if (cond.type == VAL_ERROR) return cond;
+	if (cond.type == VAL_ERROR)
+		return cond;
 
 	if (cond.type != VAL_NIL)
 		return eval(env, car(cdr(v)));
@@ -428,9 +428,7 @@ builtin_cons(struct env *env, struct value v)
 {
 	struct value a = eval(env, car(v)),
 		b = eval(env, car(cdr(v)));
-	if (a.type == VAL_NULL) return VNULL;
 	if (a.type == VAL_ERROR) return a;
-	if (b.type == VAL_NULL) return VNULL;
 	if (b.type == VAL_ERROR) return b;
 	return cons(env, a, b);
 }

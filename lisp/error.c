@@ -36,9 +36,7 @@ print_error(struct env *env, struct value e)
 {
 	/* TODO: Make this more fancy. Check `buf` size. */
 	char buf[256];
-	sprintf(buf, "%s: %s",
-	        (char *[]){"error","note"}[e.type - VAL_ERROR],
-	        tostring(string(e)));
+	sprintf(buf, "error: %s", tostring(string(e)));
 	struct value v = gc_alloc(env, VAL_STRING);
 	string(v) = kdgu_news(buf);
 	return v;

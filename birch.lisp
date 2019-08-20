@@ -4,7 +4,8 @@
 
 (defq msg-hook '(sed-line
 		 command
-		 log-line))
+		 log-line
+		 (lambda (line) (stdout (format-line line) "\n"))))
 
 (defq join-hook '(init-channel
 		  (lambda (serv chan)
@@ -31,8 +32,7 @@
   ;; 	   "birch"
   ;; 	   "realname")
   (join "kroknet" "#test")
-  (join "kroknet" "#test2")
-  (join "freenode" "##krok"))
+  (join "kroknet" "#test2"))
 
 (defun get-date (line) (nth line 0))
 (defun get-nick (line) (nth line 1))

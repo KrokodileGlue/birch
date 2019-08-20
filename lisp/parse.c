@@ -13,7 +13,7 @@ static struct value
 parse_expr(struct env *env, struct lexer *l)
 {
 	struct token *t = tok(l);
-	if (!t) return VNULL;
+	if (!t) return VEOF;
 
 	/*
 	 * The cast to int is here to suppress the `case value 'x' not
@@ -76,13 +76,13 @@ parse_expr(struct env *env, struct lexer *l)
 		return error(env, "unexpected `%s'", t->body);
 	}
 
-	return VNULL;
+	return error(env, "you shouldn't see this");
 }
 
 struct value
 parse(struct env *env, struct lexer *l)
 {
-	struct value head = NIL, tail = head;
+	struct value head = NIL, tail = NIL;
 
 	for (;;) {
 		struct value o = parse_expr(env, l);
@@ -90,10 +90,11 @@ parse(struct env *env, struct lexer *l)
 		if (o.type == VAL_ERROR)
 			return o;
 
-		if (o.type == VAL_NULL)
+		if (o.type == VAL_EOF)
 			return error(env, "unmatched `('");
 
-		if (o.type == VAL_RPAREN) return head;
+		if (o.type == VAL_RPAREN)
+			return head;
 
 		if (o.type == VAL_DOT) {
 			cdr(tail) = parse_expr(env, l);

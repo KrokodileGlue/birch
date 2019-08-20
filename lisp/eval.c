@@ -78,7 +78,7 @@ apply(struct env *env,
 	     arg = cdr(arg)) {
 		if (car(arg).type == VAL_KEYWORDPARAM) {
 			keys = append(env, keys,
-			              cons(env, obj(car(arg)).keyword,
+			              cons(env, keyword(car(arg)),
 			                   car(cdr(arg))));
 			arg = cdr(arg);
 		} else {
@@ -89,21 +89,21 @@ apply(struct env *env,
 	/* This is kinda complicated. */
 
 	if (list_length(env, args).integer
-	    < list_length(env, obj(fn).param).integer
-	    - list_length(env, obj(fn).optional).integer
-	    - list_length(env, obj(fn).key).integer)
+	    < list_length(env, function(fn).param).integer
+	    - list_length(env, function(fn).optional).integer
+	    - list_length(env, function(fn).key).integer)
 		return error(env, "invalid number of arguments");
 
 	if (list_length(env, args).integer
-	    > list_length(env, obj(fn).param).integer
-	    && obj(fn).rest.type == VAL_NIL)
+	    > list_length(env, function(fn).param).integer
+	    && function(fn).rest.type == VAL_NIL)
 		return error(env, "too many arguments");
 
 	args = eval_list(env, args);
 	if (args.type == VAL_ERROR) return args;
-	struct env *newenv = push_env(env, obj(fn).param, args);
+	struct env *newenv = push_env(env, function(fn).param, args);
 
-	for (struct value opt = obj(fn).optional;
+	for (struct value opt = function(fn).optional;
 	     opt.type != VAL_NIL;
 	     opt = cdr(opt)) {
 		struct value bind = find(newenv, car(car(opt)));
@@ -114,7 +114,7 @@ apply(struct env *env,
 			cdr(bind) = cdr(car(opt));
 	}
 
-	for (struct value key = obj(fn).key;
+	for (struct value key = function(fn).key;
 	     key.type != VAL_NIL;
 	     key = cdr(key)) {
 		struct value bind = find(newenv, car(car(key)));
@@ -125,7 +125,7 @@ apply(struct env *env,
 	}
 
 	if (rest(fn).type != VAL_NIL) {
-		struct value p = obj(fn).param, q = args;
+		struct value p = function(fn).param, q = args;
 
 		while (p.type != VAL_NIL) {
 			p = cdr(p), q = cdr(q);
@@ -133,9 +133,9 @@ apply(struct env *env,
 		}
 
 		if (q.type != VAL_NIL)
-			add_variable(newenv, obj(fn).rest, q);
+			add_variable(newenv, function(fn).rest, q);
 		else
-			add_variable(newenv, obj(fn).rest, NIL);
+			add_variable(newenv, function(fn).rest, NIL);
 	}
 
 	for (struct value key = keys;
@@ -147,7 +147,7 @@ apply(struct env *env,
 		else cdr(bind) = cdr(car(key));
 	}
 
-	return progn(newenv, obj(fn).body);
+	return progn(newenv, function(fn).body);
 }
 
 /*
@@ -168,7 +168,6 @@ eval_list(struct env *env, struct value list)
 		if (!IS_LIST(l) || !IS_LIST(cdr(l)))
 			return list_length(env, l);
 		struct value tmp = eval(env, car(l));
-		if (tmp.type == VAL_NULL) return VNULL;
 		if (tmp.type == VAL_ERROR) return tmp;
 		if (head.type == VAL_NIL) {
 			head = tail = cons(env, tmp, NIL);
@@ -263,8 +262,6 @@ eval(struct env *env, struct value v)
 			PROTECT_SYMBOL("join");
 			PROTECT_SYMBOL("config-file");
 			PROTECT_SYMBOL("birch-eval");
-			PROTECT_SYMBOL("log");
-			PROTECT_SYMBOL("raw-log");
 		}
 
 		struct value bind = find(env, v);
