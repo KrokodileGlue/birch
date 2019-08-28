@@ -16,14 +16,6 @@
 #include "parse.h"
 #include "gc.h"
 
-#define PROTECT_SYMBOL(X)	  \
-	do { \
-		struct value val = eval(env, (X)); \
-		if (val.type == VAL_ERROR \
-		    && !strncmp((char *)string(val)->s, "you", 3)) \
-			return val; \
-	} while (0)
-
 static struct value
 append(struct env *env, struct value list, struct value v)
 {
@@ -39,7 +31,7 @@ append(struct env *env, struct value list, struct value v)
  * function value built from it. `car(v)` is the list of parameters
  * and `cdr(v)` is the body of the function.
  *
- * TODO: Rewrite the ugly parts.
+ * TODO: Rewrite.
  */
 
 static struct value
@@ -144,7 +136,7 @@ make_function(struct env *env, struct value v, enum value_type type)
 	}
 
 	param(r) = param;
-	env(r)   = env;
+	env(r) = env;
 
 	if (cdr(v).type == VAL_CELL
 	    && car(cdr(v)).type == VAL_STRING) {
@@ -180,7 +172,6 @@ builtin_fn(struct env *env, struct value v)
 		return make_function(env, v, VAL_FUNCTION);
 
 	struct value sym = car(v);
-	PROTECT_SYMBOL(sym);
 
 	/*
 	 * Otherwise it's obviously a named function which should be
@@ -210,8 +201,6 @@ builtin_set(struct env *env, struct value v)
 	if (sym.type == VAL_ERROR)
 		return sym;
 
-	PROTECT_SYMBOL(sym);
-
 	if (sym.type != VAL_SYMBOL)
 		return error(env, "the first argument to `set'"
 		             " must be a symbol");
@@ -239,8 +228,6 @@ builtin_def(struct env *env, struct value v)
 
 	if (sym.type == VAL_ERROR)
 		return sym;
-
-	PROTECT_SYMBOL(sym);
 
 	if (sym.type != VAL_SYMBOL)
 		return error(env, "the first argument to `def'"
@@ -476,8 +463,6 @@ builtin_macro(struct env *env, struct value v)
 		return error(env, "missing list of parameters");
 
 	struct value fun = make_function(env, cdr(v), VAL_MACRO);
-	struct value sym = car(v);
-	PROTECT_SYMBOL(sym);
 	if (fun.type == VAL_ERROR) return fun;
 	name(fun) = kdgu_copy(string(car(v)));
 
@@ -537,7 +522,6 @@ builtin_let(struct env *env, struct value v)
 
 		struct value sym = car(car(i));
 		struct value val = eval(newenv, car(cdr(car(i))));
-		PROTECT_SYMBOL(sym);
 		if (val.type == VAL_ERROR) return val;
 		add_variable(newenv, sym, val);
 	}
@@ -724,8 +708,9 @@ builtin_match(struct env *env, struct value v)
 		switch (string(car(cdr(v)))->s[i]) {
 		case 'g': opt |= KTRE_GLOBAL; break;
 		case 'i': opt |= KTRE_INSENSITIVE; break;
-		default: return error(env, "unrecognized"
-		                      " mode modifier");
+		default:
+			return error(env, "unrecognized"
+			             " mode modifier");
 		}
 	}
 
@@ -733,7 +718,7 @@ builtin_match(struct env *env, struct value v)
 	int **vec;
 
 	if (re->err)
-		return error(env, "%s at index %d in ",
+		return error(env, "%s at index %d in %s",
 		             re->err_str,
 		             re->i,
 		             tostring(pattern));
@@ -1013,7 +998,9 @@ struct value
 builtin_append(struct env *env, struct value v)
 {
 	v = eval_list(env, v);
-	if (v.type == VAL_ERROR) return v;
+
+	if (v.type == VAL_ERROR)
+		return v;
 
 	struct value out = gc_alloc(env, VAL_STRING);
 	string(out) = kdgu_news("");

@@ -165,7 +165,9 @@ cons(struct env *env, struct value car, struct value cdr)
 struct value
 acons(struct env *env, struct value x, struct value y, struct value a)
 {
-	return cons(env, cons(env, x, y), a);
+	struct value left = cons(env, x, y);
+	struct value ret = cons(env, left, a);
+	return ret;
 }
 
 struct value
@@ -191,8 +193,7 @@ expand(struct env *env, struct value v)
 	if (bind.type == VAL_NIL || cdr(bind).type != VAL_MACRO)
 		return v;
 
-	struct value fn = cdr(bind);
-	struct value args = cdr(v);
+	struct value fn = cdr(bind), args = cdr(v);
 
 	struct env *newenv = push_env(env, function(fn).param, args);
 

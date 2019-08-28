@@ -165,7 +165,10 @@ builtin_stdout(struct env *env, struct value v)
 		}
 
 		struct value e = print_value(env, car(p));
-		if (e.type == VAL_ERROR) return e;
+
+		if (e.type == VAL_ERROR)
+			return e;
+
 		kdgu_append(out, string(e));
 	}
 

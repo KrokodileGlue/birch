@@ -279,12 +279,9 @@ birch_config(struct birch *b, const char *path)
 
 		if (!t) {
 			struct value init = find(env, make_symbol(env, "init"));
+			/* TODO */
+			if (init.type == VAL_NIL) exit(1);
 			struct value call = gc_alloc(env, VAL_CELL);
-
-			if (call.type == VAL_ERROR) {
-				/* TODO */
-				exit(1);
-			}
 
 			car(call) = cdr(init);
 			cdr(call) = NIL;

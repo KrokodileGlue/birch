@@ -30,7 +30,8 @@ progn(struct env *env, struct value list)
 	     lp.type != VAL_NIL;
 	     lp = cdr(lp)) {
 		r = eval(env, car(lp));
-		if (r.type == VAL_ERROR) return r;
+		if (r.type == VAL_ERROR)
+			return r;
 	}
 
 	return r;
@@ -164,15 +165,19 @@ eval_list(struct env *env, struct value list)
 	for (struct value l = list;
 	     l.type != VAL_NIL;
 	     l = cdr(l)) {
-		/* TODO: WTF is this? */
 		if (!IS_LIST(l) || !IS_LIST(cdr(l)))
 			return list_length(env, l);
+
 		struct value tmp = eval(env, car(l));
-		if (tmp.type == VAL_ERROR) return tmp;
+
+		if (tmp.type == VAL_ERROR)
+			return tmp;
+
 		if (head.type == VAL_NIL) {
 			head = tail = cons(env, tmp, NIL);
 			continue;
 		}
+
 		cdr(tail) = cons(env, tmp, NIL);
 		tail = cdr(tail);
 	}
@@ -248,22 +253,6 @@ eval(struct env *env, struct value v)
 	 */
 
 	case VAL_SYMBOL: {
-#define PROTECT_SYMBOL(X)	  \
-		if (kdgu_cmp(string(v), &KDGU(X), false, NULL)) { \
-			ret = error(env, "you aren't powerful" \
-			            " enough to use `%s'", (X)); \
-			break; \
-		}
-
-		if (env->birch->env->protect) {
-			PROTECT_SYMBOL("join-hook");
-			PROTECT_SYMBOL("msg-hook");
-			PROTECT_SYMBOL("connect");
-			PROTECT_SYMBOL("join");
-			PROTECT_SYMBOL("config-file");
-			PROTECT_SYMBOL("birch-eval");
-		}
-
 		struct value bind = find(env, v);
 
 		if (bind.type == VAL_NIL) {

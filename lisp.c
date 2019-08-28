@@ -70,10 +70,19 @@ do_msg_hook(struct birch *b,
 		if (res.type == VAL_ERROR) {
 			puts("msg-hook error:");
 			puts(tostring(string(res)));
+			puts(tostring(string(print_value(env, car(hook)))));
 		} else if (res.type != VAL_NIL) {
 			send_value(b, env, server, l->middle[0], res);
 		}
 	}
+
+	for (struct list *chan = b->channel; chan; chan = chan->next)
+		gc_mark(chan->data, ((struct env *)chan->data)->vars);
+
+	gc_mark(env, b->env->vars);
+
+	/* It doesn't matter which environment is used here. */
+	gc_sweep(env);
 }
 
 void

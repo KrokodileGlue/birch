@@ -1,48 +1,69 @@
 struct gc {
-	int64_t slot[VAL_ERROR + 1];
-	uint64_t *bmp[VAL_ERROR + 1];
-
-	kdgu **string;
+	uint64_t *bmp;
+	uint64_t *mark;
 
 	struct {
-		struct value car, cdr;
-	} *cell;
+		union {
+			kdgu *string;
 
-	struct {
-		kdgu *name;
-		struct value param;
-		struct value body;
-		struct env *env;
+			struct {
+				struct value car, cdr;
+			} cell;
 
-		struct value optional;
-		struct value key;
-		struct value rest;
-		struct value docstring;
-	} *function;
+			struct {
+				kdgu *name;
+				struct value param;
+				struct value body;
+				struct env *env;
 
-	struct value *keyword;
+				struct value optional;
+				struct value key;
+				struct value rest;
+				struct value docstring;
+			} function;
 
-	builtin **builtin;
+			struct value keyword;
 
+			builtin *builtin;
+		};
+
+		enum value_type type;
+	} *obj;
 };
 
-#define keyword(X) (env->gc->keyword[(X).obj])
-#define builtin(X) (env->gc->builtin[(X).obj])
-#define string(X) (env->gc->string[(X).obj])
-#define car(X) (env->gc->cell[(X).obj].car)
-#define cdr(X) (env->gc->cell[(X).obj].cdr)
+#define keyword(X) (env->gc->obj[(X).obj].keyword)
+#define builtin(X) (env->gc->obj[(X).obj].builtin)
+#define string(X) (env->gc->obj[(X).obj].string)
+#define car(X) (env->gc->obj[(X).obj].cell.car)
+#define cdr(X) (env->gc->obj[(X).obj].cell.cdr)
 
-#define function(X) (env->gc->function[(X).obj])
-#define optional(X) (env->gc->function[(X).obj].optional)
-#define param(X) (env->gc->function[(X).obj].param)
-#define env(X) (env->gc->function[(X).obj].env)
-#define key(X) (env->gc->function[(X).obj].key)
-#define body(X) (env->gc->function[(X).obj].body)
-#define rest(X) (env->gc->function[(X).obj].rest)
-#define name(X) (env->gc->function[(X).obj].name)
-#define docstring(X) (env->gc->function[(X).obj].docstring)
+#define function(X) (env->gc->obj[(X).obj].function)
+#define optional(X) (env->gc->obj[(X).obj].function.optional)
+#define param(X) (env->gc->obj[(X).obj].function.param)
+#define env(X) (env->gc->obj[(X).obj].function.env)
+#define key(X) (env->gc->obj[(X).obj].function.key)
+#define body(X) (env->gc->obj[(X).obj].function.body)
+#define rest(X) (env->gc->obj[(X).obj].function.rest)
+#define name(X) (env->gc->obj[(X).obj].function.name)
+#define docstring(X) (env->gc->obj[(X).obj].function.docstring)
+
+#define type(X) (env->gc->obj[X].type)
+
+#define marked(X) (env->gc->mark[(X).obj / 64]	\
+                   & (1LL << ((X).obj % 64)))
+
+#define mark(X) (env->gc->mark[(X).obj / 64]	\
+                 = env->gc->mark[(X).obj / 64]	\
+                 | (1LL << ((X).obj % 64)))
+
+#define unmark(X) (env->gc->mark[(X).obj / 64]	\
+                   = ~(~env->gc->mark[(X).obj / 64]	\
+                       | (1LL << ((X).obj % 64))))
 
 struct gc *gc_new(void);
 struct value gc_alloc(struct env *env, enum value_type type);
 struct value gc_copy(struct env *env, struct value v);
-//void gc_mark(struct env *env, struct value *v);
+void gc_mark(struct env *env, struct value v);
+void gc_sweep(struct env *env);
+
+#define GC_MAX_OBJECT (10000*64)

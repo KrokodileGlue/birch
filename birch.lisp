@@ -300,7 +300,7 @@ the pattern described by it."
 (defun ping () '"pong")
 
 (defun history ()
-  (let ((node (reverse log))
+  (let ((node (reverse raw-log))
 	(output ""))
     (while node
       (setq output (append output (format-line (car node)) "\n"))

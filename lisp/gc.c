@@ -3,63 +3,20 @@
 #include <assert.h>
 
 #include "lisp.h"
+#include "../list.h"
 #include "../birch.h"
 #include "lex.h"
 #include "gc.h"
 #include "error.h"
-
-enum value_type alloc_type[] = {
-	-1, /* VAL_NIL */
-	-1, /* VAL_INT */
-	VAL_CELL, /* VAL_CELL */
-	VAL_STRING, /* VAL_STRING */
-	VAL_STRING, /* VAL_SYMBOL */
-	VAL_BUILTIN, /* VAL_BUILTIN */
-	VAL_FUNCTION, /* VAL_FUNCTION */
-	VAL_FUNCTION, /* VAL_MACRO */
-	-1, /* VAL_ENV */
-	VAL_KEYWORD, /* VAL_KEYWORDPARAM */
-	VAL_KEYWORD, /* VAL_KEYWORD */
-	VAL_KEYWORD, /* VAL_COMMA */
-	VAL_KEYWORD, /* VAL_COMMAT */
-	-1, /* VAL_TRUE */
-	-1, /* VAL_RPAREN */
-	-1, /* VAL_DOT */
-	-1, /* VAL_EOF */
-	VAL_STRING, /* VAL_ERROR */
-};
-
-int max_type[] = {
-	-1, /* VAL_NIL */
-	-1, /* VAL_INT */
-	1000000, /* VAL_CELL */
-	1000000, /* VAL_STRING */
-	-1, /* VAL_SYMBOL */
-	100, /* VAL_BUILTIN */
-	100000, /* VAL_FUNCTION */
-	-1, /* VAL_MACRO */
-	-1, /* VAL_ENV */
-	-1, /* VAL_KEYWORDPARAM */
-	5000, /* VAL_KEYWORD */
-	-1, /* VAL_COMMA */
-	-1, /* VAL_COMMAT */
-	-1, /* VAL_TRUE */
-	-1, /* VAL_RPAREN */
-	-1, /* VAL_DOT */
-	-1, /* VAL_EOF */
-	-1, /* VAL_ERROR */
-};
 
 struct gc *
 gc_new(void)
 {
 	struct gc *gc = malloc(sizeof *gc);
 	memset(gc, 0, sizeof *gc);
-	gc->string = malloc(max_type[VAL_STRING] * sizeof *gc->string);
-	gc->cell = malloc(max_type[VAL_CELL] * sizeof *gc->cell);
-	gc->function = malloc(max_type[VAL_FUNCTION] * sizeof *gc->function);
-	gc->keyword = malloc(max_type[VAL_KEYWORD] * sizeof *gc->keyword);
-	gc->builtin = malloc(max_type[VAL_BUILTIN] * sizeof *gc->builtin);
+	gc->obj = calloc(GC_MAX_OBJECT, sizeof *gc->obj);
+	gc->bmp = calloc(GC_MAX_OBJECT / 64, sizeof *gc->bmp);
+	gc->mark = calloc(GC_MAX_OBJECT / 64, sizeof *gc->mark);
 	return gc;
 }
 
@@ -83,35 +40,59 @@ bmp_alloc(uint64_t *bmp, int64_t slots)
 	return -1;
 }
 
+static void
+bmp_free(uint64_t *bmp, uint64_t idx)
+{
+	bmp[idx / 64] = ~(~bmp[idx / 64] | (1LL << (idx % 64)));
+}
+
+#define ALLOCATED(X) \
+	((X) != VAL_NIL && (X) != VAL_TRUE && (X) != VAL_INT && (X) != VAL_DOT)
+
+static void
+free_object(struct env *env, struct value v)
+{
+	if (!ALLOCATED(v.type)) return;
+	switch (v.type) {
+	case VAL_SYMBOL:
+	case VAL_STRING:
+		kdgu_free(string(v));
+		string(v) = NULL;
+		break;
+	default:;
+	}
+	bmp_free(env->gc->bmp, v.obj);
+	type(v.obj) = VAL_NIL;
+}
+
+void
+gc_sweep(struct env *env)
+{
+	struct gc *gc = env->gc;
+	for (int i = 0; i < GC_MAX_OBJECT; i++) {
+		struct value v = (struct value){type(i),{i}};
+		if (!marked(v)) free_object(env, v);
+	}
+	memset(gc->mark, 0, (GC_MAX_OBJECT / 64) * sizeof *gc->mark);
+}
+
 struct value
 gc_alloc(struct env *env, enum value_type type)
 {
-	enum value_type atype = alloc_type[type];
-	if (atype < 0) return (struct value){type,{0}};
-	int max = max_type[atype];
-
+	if (!ALLOCATED(type))
+		return (struct value){type,{0}};
 	struct gc *gc = env->gc;
-	int64_t idx = bmp_alloc(gc->bmp[atype], gc->slot[atype]);
-
-	if (idx == -1) {
-		gc->slot[atype] += 64;
-		gc->bmp[atype] = realloc(gc->bmp[atype],
-		                              ((gc->slot[atype] / 64) + 1)
-		                              * sizeof *gc->bmp[atype]);
-		memset(&gc->bmp[atype][(gc->slot[atype] - 64) / 64], 0,
-		       sizeof *gc->bmp[atype]);
-		idx = bmp_alloc(gc->bmp[atype], gc->slot[atype]);
-	}
-
-	if (idx < 0 || idx >= max) exit(1);
-
+	int64_t idx = bmp_alloc(gc->bmp, GC_MAX_OBJECT);
+	if (idx < 0 || idx >= GC_MAX_OBJECT) exit(1);
+	type(idx) = type;
+	//printf("alloc: %"PRId64"\n", idx);
 	return (struct value){type, {idx}};
 }
 
 struct value
 gc_copy(struct env *env, struct value v)
 {
-	if (v.type == VAL_NIL || v.type == VAL_TRUE)
+	if (!ALLOCATED(v.type))
 		return v;
 
 	struct value ret = gc_alloc(env, v.type);
@@ -140,4 +121,32 @@ gc_copy(struct env *env, struct value v)
 	}
 
 	return ret;
+}
+
+void
+gc_mark(struct env *env, struct value v)
+{
+	if (ALLOCATED(v.type)) mark(v);
+	switch (v.type) {
+	case VAL_CELL:
+		gc_mark(env, car(v));
+		gc_mark(env, cdr(v));
+		break;
+	case VAL_COMMA:
+	case VAL_COMMAT:
+	case VAL_KEYWORDPARAM:
+	case VAL_KEYWORD:
+		gc_mark(env, keyword(v));
+		break;
+	case VAL_MACRO:
+	case VAL_FUNCTION:
+		gc_mark(env, param(v));
+		gc_mark(env, body(v));
+		gc_mark(env, optional(v));
+		gc_mark(env, key(v));
+		gc_mark(env, rest(v));
+		gc_mark(env, docstring(v));
+		break;
+	default:;
+	}
 }

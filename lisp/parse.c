@@ -30,7 +30,6 @@ parse_expr(struct env *env, struct lexer *l)
 	case ',': {
 		struct value v = gc_alloc(env, l->s[l->idx] == '@'
 		                          ? VAL_COMMAT : VAL_COMMA);
-
 		if (l->s[l->idx] == '@') {
 			l->idx++;
 			v.type = VAL_COMMAT;
@@ -46,18 +45,25 @@ parse_expr(struct env *env, struct lexer *l)
 	/* Keyword. */
 	case '&': {
 		struct value v = gc_alloc(env, VAL_KEYWORD);
+
 		keyword(v) = parse_expr(env, l);
-		if (keyword(v).type != VAL_SYMBOL)
+
+		if (keyword(v).type != VAL_SYMBOL) {
 			return error(env, "expected a symbol");
+		}
+
 		return v;
 	} break;
 
 	/* Keyword parameter. */
 	case ':': {
 		struct value v = gc_alloc(env, VAL_KEYWORDPARAM);
+
 		keyword(v) = parse_expr(env, l);
+
 		if (keyword(v).type != VAL_SYMBOL)
 			return error(env, "expected a symbol");
+
 		return v;
 	} break;
 
