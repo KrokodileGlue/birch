@@ -657,7 +657,7 @@ builtin_sed(struct env *env, struct value v)
 	                         &KDGU("\\"),
 	                         opt);
 
-	if (!res) return NIL;
+	if (!res) return subject;
 
 	struct value str = gc_alloc(env, VAL_STRING);
 	string(str) = res;

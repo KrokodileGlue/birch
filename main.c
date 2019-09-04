@@ -21,12 +21,7 @@ main(void)
 
 	struct birch *b = birch_new();
 	if (birch_config(b, "birch.lisp")) return 1;
-
-	for (struct list *l = b->server; l; l = l->next) {
-		struct server *s = l->data;
-		pthread_join(s->thread, NULL);
-	}
-
+	while (getchar() != 'q');
 	curl_global_cleanup();
 
 	return 0;
