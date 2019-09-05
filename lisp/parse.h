@@ -1,1 +1,1 @@
-struct value parse(struct env *env, struct lexer *l);
+value parse(struct env *env, struct lexer *l);

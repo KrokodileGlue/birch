@@ -2,10 +2,11 @@
 
 (defq config-file "birch.lisp")
 
-(defq msg-hook '(sed-line
+(defq msg-hook '((lambda (line) (stdout (format-line line) "\n"))
+		 ;(lambda (line) (stdout (mpanize (get-body line)) "\n"))
+		 sed-line
 		 command
-		 log-line
-		 (lambda (line) (stdout (format-line line) "\n"))))
+		 log-line))
 
 (defq join-hook '(init-channel
 		  (lambda (serv chan)
@@ -108,7 +109,7 @@ Lisp commands, or nil if it does not contain any embedded Lisp."
   "Processes any user commands embedded within a LINE that has been \
 received from a server. Returns the result of the evaluation(s) or \
 nil, if there were no commands embedded within the line."
-  (let ((msg (nth line 2))
+  (let ((msg (get-body line))
 	(regex-match (match (append "^" trigger "(.*)$") "" msg))
 	(regex-match (if regex-match regex-match
 		       (match "^sudo\s+(.*)$" "" msg)))
@@ -123,7 +124,9 @@ nil, if there were no commands embedded within the line."
 	  (if (and (not (stringp tmp))
 		   (not (string= (cdr tmp) "")))
 	      (append "error: trailing text in command: " (cdr tmp))
-	    (if output output "()")))
+	    (setq output (if output output "()"))
+	    (stdout "===> " output "\n")
+	    output))
 
       ;; There was no explicit command, but there might still be some
       ;; embedded Lisp.
@@ -186,7 +189,7 @@ documentation."
 
 (defun spongebob (string)
   "Return the Spongebob translation of STRING."
-  (sed "(.)(.)" "\l\1\u\2" "g" string))
+  (sed "(?<!^)[[:alpha:]].*?([[:alpha:]]|$)" "\L\u\0" "g" string))
 
 (defmacro mock-user (nick &optional pattern)
   "Return the Spongebob translation of the last message said by NICK \
@@ -295,7 +298,7 @@ the pattern described by it."
 
 (defun format-line (line)
   "Produce a string representation of LINE in a log-like format."
-  (append (nth line 0) " <" (nth line 1) "> " (nth line 2)))
+  (append (get-date line) " <" (get-nick line) "> " (get-body line)))
 
 (defun ping () '"pong")
 
@@ -306,6 +309,109 @@ the pattern described by it."
       (setq output (append output (format-line (car node)) "\n"))
       (setq node (cdr node)))
     output))
+
+(defun number-to-string (x)
+  (let ((position '("" "" "" "thousand" "thousand" "thousand"
+		    "million" "million" "million" "billion"
+		    "billion" "billion"))
+	(tens '("" "" "twenty-" "thirty-" "forty-" "fifty-"
+		"sixty-" "seventy-" "eighty-" "ninety-"))
+	(teens '("ten" "eleven" "twelve" "thirteen"
+		 "fourteen" "fifteen" "sixteen" "seventeen"
+		 "eighteen" "nineteen"))
+	(naughts '("zero" "one" "two" "three" "four"
+		   "five" "six" "seven" "eight" "nine")))
+    2))
+
+;; TODO this is the worst way possible to do this
+(defun superscript (x)
+  (setq x (append x))
+  (setq x (sed "0" "⁰" "g" x))
+  (setq x (sed "1" "¹" "g" x))
+  (setq x (sed "2" "²" "g" x))
+  (setq x (sed "3" "³" "g" x))
+  (setq x (sed "4" "⁴" "g" x))
+  (setq x (sed "5" "⁵" "g" x))
+  (setq x (sed "6" "⁶" "g" x))
+  (setq x (sed "7" "⁷" "g" x))
+  (setq x (sed "8" "⁸" "g" x))
+  (setq x (sed "9" "⁹" "g" x))
+  x)
+
+(defq mpan-counter 0)
+(defq mpan-phrases '("¯\_(ツ)_/¯"
+		     "— Also I am not sure this is necessary."
+		     ":<"
+		     "OTOH… who ever said they are round? :>"
+		     ":>"
+		     ":/"
+		     "OTOH I wasn’t partying either."
+		     "._."
+		     "Also I find /IGNORE to be harmful."
+		     "damnit, the bot is getting sentient!"
+		     "ncurses*"
+		     "IMO if someone blocks Tor by default, they should also block whole UK and PRC by default too."
+		     "DISCRIMINATION!"
+		     "O.o"
+		     "LOL"
+		     "xD"))
+
+(defun mpan-phrase ()
+  (let ((phrase (nth mpan-phrases mpan-counter)))
+    (setq mpan-counter (% (+ mpan-counter 1) (length mpan-phrases)))
+    phrase))
+
+(defun mpanize (x)
+  (cond (match "!\s*$" "" x)
+  	(setq x (append x " \o/")))
+  (cond (match "\blol\b" "i" x)
+  	(setq x (append x " xD")))
+  (setq x (sed "why[^.?]*$" "\0?" "" x))
+  (setq x (sed "\.\s+(\w)" ". \u\1" "g" x))
+  (setq x (sed "([^[:punct:]]|\))$" "\0." "" x))
+  (setq x (append x " " (mpan-phrase)))
+  (let ((n 1))
+    (while (match "\([[:word:]].*?\)(?!\w)" "" x)
+      (cond (= n 1) (setq x (append x " |")))
+      (setq x (sed "\([[:word:]].*?\)(?!\w)"
+  		   (append "⁽" (superscript n) "⁾\2"
+  			   (if (> 1 n) " " "")
+  			   (superscript n) " \1")
+  		   ""
+  		   x))
+      (setq n (+ n 1))))
+  (setq x (sed "([^[:punct:]]|\))$" "\0." "" x))
+  (setq x (sed "\bi\b" "I" "g" x))
+  (setq x (sed "^\s*(\w)" "\u\1" "" x))
+  (setq x (sed "\"\b" "“" "g" x))
+  (setq x (sed "\b\"" "”" "g" x))
+  (setq x (sed "(\S)'(\S)" "\1’\2" "g" x))
+  (setq x (sed "'\b" "‘" "g" x))
+  (setq x (sed "\b'" "’" "g" x))
+  (setq x (sed "[[:punct:]]?\s+http" ": http" "g" x))
+  (setq x (sed "http\S+(?<!\.)" "<\0>" "g" x))
+  (setq x (sed "[⁰¹²³⁴⁵⁶⁷⁸⁹]\s+\w" "\U\0" "g" x))
+  (setq x (sed "(\w)\s+([⁰¹²³⁴⁵⁶⁷⁸⁹])" "\1. \2" "g" x))
+  (setq x (sed "\b(no|yes)\b(?![[:punct:]])" "\0," "gi" x))
+  (setq x (sed "linux" "GNU/Linux" "gi" x))
+  (setq x (sed "\bgnu\b" "GNU" "gi" x))
+  (setq x (sed "\btfw\b" "TFW" "gi" x))
+  (setq x (sed "\bmfw\b" "MFW" "gi" x))
+  (setq x (sed "\bbtw\b" "BTW" "gi" x))
+  (setq x (sed "\bofc\b" "OFC" "gi" x))
+  (setq x (sed "\boh no\b" "ono" "gi" x))
+  (setq x (sed "\bono\b" "ONO" "gi" x))
+  (setq x (sed "\blo+l\b" "LOL" "gi" x))
+  (setq x (sed "\blol\s+" "LOL, " "gi" x))
+  (setq x (sed "\birc\s+" "IRC" "gi" x))
+  (setq x (sed "\$" "zł" "g" x))
+  (setq x (sed "\s+-+\s+" "—" "g" x))
+  (setq x (sed "\s+" " " "g" x))
+  (setq x (sed "fahrenheit" "Celsius" "gi" x))
+  (setq x (sed "\.{2,}" "…" "gi" x))
+  (setq x (sed ":\)|:D" "\\\\:D/" "g" x))
+  (setq x (sed "\bc\b" "C" "gi" x))
+  x)
 
 (in "freenode/##c-offtopic" defq trigger "\.")
 (in "kroknet/#test2" defq trigger "\.")

@@ -36,18 +36,18 @@
  *     <birch> "Hello!"
  */
 
-struct value
-builtin_in(struct env *env, struct value v)
+value
+builtin_in(struct env *env, value v)
 {
-	if (v.type == VAL_NIL)
+	if (type(v) == VAL_NIL)
 		return error(env, "`in' requires arguments");
 
-	struct value place = eval(env, car(v));
+	value place = eval(env, car(v));
 
-	if (place.type == VAL_ERROR)
+	if (type(place) == VAL_ERROR)
 		return place;
 
-	if (place.type != VAL_STRING)
+	if (type(place) != VAL_STRING)
 		return error(env, "first argument to"
 		             " `in' must be a string");
 
@@ -55,7 +55,7 @@ builtin_in(struct env *env, struct value v)
 	 * Only one argument, probably something like
 	 * `(in "global")`.
 	 */
-	if (cdr(v).type == VAL_NIL)
+	if (type(cdr(v)) == VAL_NIL)
 		return NIL;
 
 	char *descriptor = tostring(string(place));
@@ -102,29 +102,29 @@ builtin_in(struct env *env, struct value v)
 	return eval(e, cdr(v));
 }
 
-struct value
-builtin_connect(struct env *env, struct value v)
+value
+builtin_connect(struct env *env, value v)
 {
-	if (list_length(env, v).integer != 6)
+	if (integer(list_length(env, v)) != 6)
 		return error(env, "`connect' takes six arguments");
 
 	v = eval_list(env, v);
-	if (v.type == VAL_ERROR) return v;
+	if (type(v) == VAL_ERROR) return v;
 	char *arg[6] = {NULL};
 	int port = -1;
 
 	for (int i = 0; i < 6; i++) {
 		if (i == 2) {
-			if (car(v).type != VAL_INT)
+			if (type(car(v)) != VAL_INT)
 				return error(env, "the third argument"
 				             " to `connect' must be"
 				             " an integer");
-			port = car(v).integer;
+			port = integer(car(v));
 			v = cdr(v);
 			continue;
 		}
 
-		if (car(v).type != VAL_STRING)
+		if (type(car(v)) != VAL_STRING)
 			return error(env, "all arguments to"
 			             " `connect' must be strings"
 			             " except for the third");
@@ -150,23 +150,23 @@ builtin_connect(struct env *env, struct value v)
 	return TRUE;
 }
 
-struct value
-builtin_stdout(struct env *env, struct value v)
+value
+builtin_stdout(struct env *env, value v)
 {
-	struct value r = eval_list(env, v);
-	if (r.type == VAL_ERROR) return r;
+	value r = eval_list(env, v);
+	if (type(r) == VAL_ERROR) return r;
 
 	kdgu *out = kdgu_news("");
 
-	for (struct value p = r; p.type != VAL_NIL; p = cdr(p)) {
-		if (car(p).type == VAL_STRING) {
+	for (value p = r; type(p) != VAL_NIL; p = cdr(p)) {
+		if (type(car(p)) == VAL_STRING) {
 			kdgu_append(out, string(car(p)));
 			continue;
 		}
 
-		struct value e = print_value(env, car(p));
+		value e = print_value(env, car(p));
 
-		if (e.type == VAL_ERROR)
+		if (type(e) == VAL_ERROR)
 			return e;
 
 		kdgu_append(out, string(e));
@@ -178,26 +178,26 @@ builtin_stdout(struct env *env, struct value v)
 	return NIL;
 }
 
-static struct value
+static value
 quickstring(struct env *env, const char *str)
 {
-	struct value v = gc_alloc(env, VAL_STRING);
+	value v = gc_alloc(env, VAL_STRING);
 	string(v) = kdgu_news(str);
 	return v;
 }
 
-struct value
-builtin_join(struct env *env, struct value v)
+value
+builtin_join(struct env *env, value v)
 {
-	if (list_length(env, v).integer != 2)
+	if (integer(list_length(env, v)) != 2)
 		return error(env, "`join' takes two arguments");
 
-	struct value server = eval(env, car(v));
-	if (server.type == VAL_ERROR) return server;
-	struct value channel = eval(env, car(cdr(v)));
-	if (channel.type == VAL_ERROR) return channel;
+	value server = eval(env, car(v));
+	if (type(server) == VAL_ERROR) return server;
+	value channel = eval(env, car(cdr(v)));
+	if (type(channel) == VAL_ERROR) return channel;
 
-	if (server.type != VAL_STRING || channel.type != VAL_STRING)
+	if (type(server) != VAL_STRING || type(channel) != VAL_STRING)
 		return error(env, "arguments to `join'"
 		             " must be strings");
 
@@ -207,23 +207,23 @@ builtin_join(struct env *env, struct value v)
 	if (birch_join(env->birch, serv, chan))
 		return NIL;
 
-	struct value bind = find(env, make_symbol(env, "join-hook"));
-	if (bind.type == VAL_NIL) return TRUE;
+	value bind = find(env, make_symbol(env, "join-hook"));
+	if (type(bind) == VAL_NIL) return TRUE;
 
-	struct value hooks = cdr(bind);
+	value hooks = cdr(bind);
 
-	for (struct value i = hooks; i.type != VAL_NIL; i = cdr(i)) {
-		struct value call =
+	for (value i = hooks; type(i) != VAL_NIL; i = cdr(i)) {
+		value call =
 			cons(env, car(i),
 			     cons(env, server,
 			          cons(env, channel,
 			               NIL)));
-		struct value res = eval(env, call);
-		if (res.type == VAL_ERROR) {
+		value res = eval(env, call);
+		if (type(res) == VAL_ERROR) {
 			printf("error in join-hook: %s\nin: %s\n",
 			       tostring(string(res)),
 			       tostring(string(print_value(env, call))));
-		} else if (res.type != VAL_NIL) {
+		} else if (type(res) != VAL_NIL) {
 			send_value(env->birch, env, serv, chan, res);
 		}
 	}
@@ -231,34 +231,34 @@ builtin_join(struct env *env, struct value v)
 	return TRUE;
 }
 
-struct value
-builtin_current_server(struct env *env, struct value v)
+value
+builtin_current_server(struct env *env, value v)
 {
 	return quickstring(env, env->server);
 }
 
-struct value
-builtin_current_channel(struct env *env, struct value v)
+value
+builtin_current_channel(struct env *env, value v)
 {
 	return quickstring(env, env->channel);
 }
 
-struct value
-builtin_birch_eval(struct env *env, struct value v)
+value
+builtin_birch_eval(struct env *env, value v)
 {
-	if (list_length(env, v).integer != 1)
+	if (integer(list_length(env, v)) != 1)
 		return error(env, "builtin `birch-eval'"
 		             " takes one argument");
-	struct value arg = eval(env, car(v));
-	struct value limit =
+	value arg = eval(env, car(v));
+	value limit =
 		find(env, make_symbol(env, "recursion-limit"));
 	env = birch_get_env(env->birch, env->server, env->channel);
 	env->birch->env->protect = true;
-	if (limit.type != VAL_NIL && cdr(limit).type == VAL_INT)
-		env->birch->env->recursion_limit = cdr(limit).integer;
-	struct value val = eval(env, arg);
+	if (type(limit) != VAL_NIL && type(cdr(limit)) == VAL_INT)
+		env->birch->env->recursion_limit = integer(cdr(limit));
+	value val = eval(env, arg);
 	env->birch->env->protect = false;
 	env->birch->env->recursion_limit = -1;
-	if (val.type == VAL_ERROR) return print_value(env, val);
+	if (type(val) == VAL_ERROR) return print_value(env, val);
 	return val;
 }

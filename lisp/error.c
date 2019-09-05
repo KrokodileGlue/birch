@@ -11,10 +11,10 @@
 #include "error.h"
 #include "gc.h"
 
-struct value
+value
 error(struct env *env, const char *fmt, ...)
 {
-	struct value v = gc_alloc(env, VAL_ERROR);
+	value v = gc_alloc(env, VAL_ERROR);
 
 	/* TODO: Stack smashing innit. */
 	char buf[128];
@@ -31,13 +31,13 @@ error(struct env *env, const char *fmt, ...)
 	return v;
 }
 
-struct value
-print_error(struct env *env, struct value e)
+value
+print_error(struct env *env, value e)
 {
 	/* TODO: Make this more fancy. Check `buf` size. */
 	char buf[256];
 	sprintf(buf, "error: %s", tostring(string(e)));
-	struct value v = gc_alloc(env, VAL_STRING);
+	value v = gc_alloc(env, VAL_STRING);
 	string(v) = kdgu_news(buf);
 	return v;
 }

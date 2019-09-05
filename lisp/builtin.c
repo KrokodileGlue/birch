@@ -16,12 +16,12 @@
 #include "parse.h"
 #include "gc.h"
 
-static struct value
-append(struct env *env, struct value list, struct value v)
+static value
+append(struct env *env, value list, value v)
 {
-	if (list.type == VAL_NIL) return cons(env, v, NIL);
-	struct value k = list;
-	while (cdr(k).type != VAL_NIL) k = cdr(k);
+	if (!type(list)) return cons(env, v, NIL);
+	value k = list;
+	while (type(cdr(k))) k = cdr(k);
 	cdr(k) = cons(env, v, NIL);
 	return list;
 }
@@ -34,19 +34,19 @@ append(struct env *env, struct value list, struct value v)
  * TODO: Rewrite.
  */
 
-static struct value
-make_function(struct env *env, struct value v, enum value_type type)
+static value
+make_function(struct env *env, value v, enum value_type type)
 {
 	assert(type == VAL_FUNCTION || type == VAL_MACRO);
-	assert(v.type != VAL_NIL);
+	assert(type(v));
 
-	if (v.type != VAL_CELL
+	if (type(v) != VAL_CELL
 	    || !IS_LIST(car(v))
 	    || !IS_LIST(cdr(v)))
 		return error(env, "malformed function definition");
 
-	struct value r = gc_alloc(env, type);
-	struct value param = NIL;
+	value r = gc_alloc(env, type);
+	value param = NIL;
 
 	optional(r) = NIL;
 	key(r) = NIL;
@@ -55,23 +55,23 @@ make_function(struct env *env, struct value v, enum value_type type)
 	if (!IS_LIST(car(v)))
 		return error(env, "expected parameter list here");
 
-	for (struct value p = car(v);
-	     p.type == VAL_CELL;
+	for (value p = car(v);
+	     type(p) == VAL_CELL;
 	     p = cdr(p)) {
-		if (car(p).type == VAL_SYMBOL) {
+		if (type(car(p)) == VAL_SYMBOL) {
 			param = append(env, param, car(p));
 			continue;
 		}
 
-		if (car(p).type == VAL_KEYWORD
+		if (type(car(p)) == VAL_KEYWORD
 		    && kdgu_cmp(string(keyword(car(p))),
 		                &KDGU("optional"), false, NULL)) {
-			struct value current = p;
+			value current = p;
 			p = cdr(p);
 
-			while (car(p).type == VAL_SYMBOL
-			       || car(p).type == VAL_CELL) {
-				if (car(p).type == VAL_SYMBOL) {
+			while (type(car(p)) == VAL_SYMBOL
+			       || type(car(p)) == VAL_CELL) {
+				if (type(car(p)) == VAL_SYMBOL) {
 					optional(r) = append(env, optional(r), cons(env, car(p), NIL));
 					param = append(env, param, car(p));
 				} else {
@@ -79,24 +79,24 @@ make_function(struct env *env, struct value v, enum value_type type)
 					param = append(env, param, car(car(p)));
 				}
 
-				if (cdr(p).type == VAL_CELL) p = cdr(p), current = cdr(current);
+				if (type(cdr(p)) == VAL_CELL) p = cdr(p), current = cdr(current);
 				else break;
 			}
 
-			if (cdr(p).type == VAL_NIL) break;
+			if (!type(cdr(p))) break;
 			p = current;
 			continue;
 		}
 
-		if (car(p).type == VAL_KEYWORD
+		if (type(car(p)) == VAL_KEYWORD
 		    && kdgu_cmp(string(keyword(car(p))),
 		                &KDGU("key"), false, NULL)) {
-			struct value current = p;
+			value current = p;
 			p = cdr(p);
 
-			while (car(p).type == VAL_SYMBOL
-			       || car(p).type == VAL_CELL) {
-				if (car(p).type == VAL_SYMBOL) {
+			while (type(car(p)) == VAL_SYMBOL
+			       || type(car(p)) == VAL_CELL) {
+				if (type(car(p)) == VAL_SYMBOL) {
 					key(r) = append(env, key(r), cons(env, car(p), NIL));
 					param = append(env, param, car(p));
 				} else {
@@ -104,25 +104,25 @@ make_function(struct env *env, struct value v, enum value_type type)
 					param = append(env, param, car(car(p)));
 				}
 
-				if (cdr(p).type == VAL_CELL) p = cdr(p), current = cdr(current);
+				if (type(cdr(p)) == VAL_CELL) p = cdr(p), current = cdr(current);
 				else break;
 			}
 
-			if (cdr(p).type == VAL_NIL) break;
+			if (!type(cdr(p))) break;
 			p = current;
 			continue;
 		}
 
-		if (car(p).type == VAL_KEYWORD
+		if (type(car(p)) == VAL_KEYWORD
 		    && kdgu_cmp(string(keyword(car(p))),
 		                &KDGU("rest"), false, NULL)) {
-			if (p.type != VAL_CELL
-			    || cdr(p).type != VAL_CELL
-			    || car(cdr(p)).type != VAL_SYMBOL)
+			if (type(p) != VAL_CELL
+			    || type(cdr(p)) != VAL_CELL
+			    || type(car(cdr(p))) != VAL_SYMBOL)
 				return error(env, "expected a symbol");
 			p = cdr(p);
 			rest(r) = car(p);
-			if (cdr(p).type != VAL_NIL)
+			if (type(cdr(p)))
 				return error(env, "expected end of parameter list to follow REST parameter");
 			break;
 		}
@@ -130,16 +130,16 @@ make_function(struct env *env, struct value v, enum value_type type)
 		return error(env,
 		             "parameter name must be a symbol"
 		             " (this is %s %s)",
-		             IS_VOWEL(*TYPE_NAME(car(p).type))
+		             IS_VOWEL(*TYPE_NAME(type(car(p))))
 		             ? "an" : "a",
-		             TYPE_NAME(car(p).type));
+		             TYPE_NAME(type(car(p))));
 	}
 
 	param(r) = param;
 	env(r) = env;
 
-	if (cdr(v).type == VAL_CELL
-	    && car(cdr(v)).type == VAL_STRING) {
+	if (type(cdr(v)) == VAL_CELL
+	    && type(car(cdr(v))) == VAL_STRING) {
 		/* TODO: Should this copy the thing? */
 		docstring(r) = car(cdr(v));
 		body(r) = cdr(cdr(v));
@@ -154,114 +154,114 @@ make_function(struct env *env, struct value v, enum value_type type)
  * Builds a function. Builds both named and anonymous functions.
  */
 
-struct value
-builtin_fn(struct env *env, struct value v)
+value
+builtin_fn(struct env *env, value v)
 {
-	if (v.type == VAL_NIL)
+	if (!type(v))
 		return error(env, "`defun' requires arguments");
 
-	if (cdr(v).type != VAL_CELL)
+	if (type(cdr(v)) != VAL_CELL)
 		return error(env, "missing list of parameters");
 
 	/*
-	 * If `car(v).type != VAL_SYMBOL` then this is an anonymous
+	 * If `type(car(v)) != VAL_SYMBOL` then this is an anonymous
 	 * function (because it has no name).
 	 */
 
-	if (car(v).type != VAL_SYMBOL)
+	if (type(car(v)) != VAL_SYMBOL)
 		return make_function(env, v, VAL_FUNCTION);
 
-	struct value sym = car(v);
+	value sym = car(v);
 
 	/*
 	 * Otherwise it's obviously a named function which should be
 	 * added to the environment as a variable.
 	 */
 
-	struct value fun = make_function(env, cdr(v), VAL_FUNCTION);
-	if (fun.type == VAL_ERROR) return fun;
+	value fun = make_function(env, cdr(v), VAL_FUNCTION);
+	if (type(fun) == VAL_ERROR) return fun;
 	name(fun) = kdgu_copy(string(sym));
 
-	struct value bind = find(env, sym);
+	value bind = find(env, sym);
 
-	if (bind.type == VAL_NIL)
+	if (!type(bind))
 		return add_variable(env, sym, fun);
 
 	return cdr(bind) = fun;
 }
 
-struct value
-builtin_set(struct env *env, struct value v)
+value
+builtin_set(struct env *env, value v)
 {
-	if (v.type != VAL_CELL || cdr(v).type == VAL_NIL)
+	if (type(v) != VAL_CELL || !type(cdr(v)))
 		return error(env, "`set' requires two arguments");
 
-	struct value sym = eval(env, car(v));
+	value sym = eval(env, car(v));
 
-	if (sym.type == VAL_ERROR)
+	if (type(sym) == VAL_ERROR)
 		return sym;
 
-	if (sym.type != VAL_SYMBOL)
+	if (type(sym) != VAL_SYMBOL)
 		return error(env, "the first argument to `set'"
 		             " must be a symbol");
 
-	struct value bind = find(env, sym);
+	value bind = find(env, sym);
 
-	if (bind.type == VAL_NIL)
+	if (!type(bind))
 		return error(env, "undeclared identifier in `set'");
 
-	struct value value = eval(env, car(cdr(v)));
+	value value = eval(env, car(cdr(v)));
 
-	if (value.type == VAL_ERROR)
+	if (type(value) == VAL_ERROR)
 		return value;
 
 	return cdr(bind) = value;
 }
 
-struct value
-builtin_def(struct env *env, struct value v)
+value
+builtin_def(struct env *env, value v)
 {
-	if (v.type != VAL_CELL || cdr(v).type == VAL_NIL)
+	if (type(v) != VAL_CELL || !type(cdr(v)))
 		return error(env, "`def' requires two arguments");
 
-	struct value sym = eval(env, car(v));
+	value sym = eval(env, car(v));
 
-	if (sym.type == VAL_ERROR)
+	if (type(sym) == VAL_ERROR)
 		return sym;
 
-	if (sym.type != VAL_SYMBOL)
+	if (type(sym) != VAL_SYMBOL)
 		return error(env, "the first argument to `def'"
 		             " must be a symbol");
 
-	struct value value = eval(env, car(cdr(v)));
+	value value = eval(env, car(cdr(v)));
 	return add_variable(env, sym, value);
 }
 
-struct value
-builtin_defq(struct env *env, struct value v)
+value
+builtin_defq(struct env *env, value v)
 {
- 	if (list_length(env, v).integer != 2)
+	if (integer(list_length(env, v)) != 2)
 		return error(env, "`defq' requires two arguments");
 
-	if (car(v).type != VAL_SYMBOL)
+	if (type(car(v)) != VAL_SYMBOL)
 		return error(env, "the first argument to `defq'"
 		             " must be a symbol");
 
 	return builtin_def(env, cons(env, quote(env, car(v)), cdr(v)));
 }
 
-struct value
-builtin_setq(struct env *env, struct value v)
+value
+builtin_setq(struct env *env, value v)
 {
 	/*
 	 * Don't need to check `list_length` for errors because `v` is
 	 * always a well-formed list and `list_length` cannot fail in
 	 * any other case (it doesn't allocate anything).
 	 */
- 	if (list_length(env, v).integer != 2)
+ 	if (integer(list_length(env, v)) != 2)
 		return error(env, "`setq' requires two arguments");
 
-	if (car(v).type != VAL_SYMBOL)
+	if (type(car(v)) != VAL_SYMBOL)
 		return error(env, "the first argument to `setq'"
 		             " must be a symbol");
 
@@ -270,66 +270,66 @@ builtin_setq(struct env *env, struct value v)
 
 #define ARITHMETIC(X)	  \
 	int sum = 0, first = 1; \
-	for (struct value args = eval_list(env, list); \
-	     args.type != VAL_NIL; \
+	for (value args = eval_list(env, list); \
+	     type(args); \
 	     args = cdr(args)) { \
-		if (args.type == VAL_ERROR) return args; \
-		if (car(args).type == VAL_INT) { \
-			if (*#X == '/' && car(args).integer == 0) \
+		if (type(args) == VAL_ERROR) return args; \
+		if (type(car(args)) == VAL_INT) { \
+			if (*#X == '/' && integer(car(args)) == 0) \
 				return error(env, \
 				             "division by zero is" \
 				             " forbidden."); \
 			if (first) { \
-				sum = car(args).integer; \
+				sum = integer(car(args)); \
 				first = 0; \
 			} \
-			else sum X##= car(args).integer; \
+			else sum X##= integer(car(args)); \
 			continue; \
 		} \
 		return error(env, \
 		             "builtin `"#X"' takes only " \
 		             "numeric arguments (got `%s')", \
-		             TYPE_NAME(car(args).type)); \
+		             TYPE_NAME(type(car(args)))); \
 	} \
-	return (struct value){VAL_INT, {sum}};
+	return mkint(sum);
 
-struct value
-builtin_add(struct env *env, struct value list)
+value
+builtin_add(struct env *env, value list)
 {
 	ARITHMETIC(+);
 }
 
-struct value
-builtin_sub(struct env *env, struct value list)
+value
+builtin_sub(struct env *env, value list)
 {
 	ARITHMETIC(-);
 }
 
-struct value
-builtin_mul(struct env *env, struct value list)
+value
+builtin_mul(struct env *env, value list)
 {
 	ARITHMETIC(*);
 }
 
-struct value
-builtin_div(struct env *env, struct value list)
+value
+builtin_div(struct env *env, value list)
 {
 	ARITHMETIC(/);
 }
 
-struct value
-builtin_inteq(struct env *env, struct value list)
+value
+builtin_inteq(struct env *env, value list)
 {
 	int sum = 0, first = 1;
 
-	for (struct value args = eval_list(env, list);
-	     args.type != VAL_NIL;
+	for (value args = eval_list(env, list);
+	     type(args);
 	     args = cdr(args)) {
-		if (args.type == VAL_ERROR) return args;
+		if (type(args) == VAL_ERROR) return args;
 
-		if (car(args).type == VAL_INT) {
-			if (first) sum = car(args).integer, first = 0;
-			else if (car(args).integer != sum)
+		if (type(car(args)) == VAL_INT) {
+			if (first) sum = integer(car(args)), first = 0;
+			else if (integer(car(args)) != sum)
 				return NIL;
 			continue;
 		}
@@ -337,25 +337,25 @@ builtin_inteq(struct env *env, struct value list)
 		return error(env,
 		             "builtin `=' takes only numeric"
 		             " arguments (got `%s')",
-		             TYPE_NAME(car(args).type));
+		             TYPE_NAME(type(car(args))));
 	}
 
 	return TRUE;
 }
 
-struct value
-builtin_less(struct env *env, struct value v)
+value
+builtin_less(struct env *env, value v)
 {
 	int sum = 0, first = 1;
 
-	for (struct value args = eval_list(env, v);
-	     args.type != VAL_NIL;
+	for (value args = eval_list(env, v);
+	     type(args);
 	     args = cdr(args)) {
-		if (args.type == VAL_ERROR) return args;
+		if (type(args) == VAL_ERROR) return args;
 
-		if (car(args).type == VAL_INT) {
-			if (first) sum = car(args).integer, first = 0;
-			else if (car(args).integer >= sum)
+		if (type(car(args)) == VAL_INT) {
+			if (first) sum = integer(car(args)), first = 0;
+			else if (integer(car(args)) >= sum)
 				return NIL;
 			continue;
 		}
@@ -363,212 +363,251 @@ builtin_less(struct env *env, struct value v)
 		return error(env,
 		             "builtin `<' takes only numeric"
 		             " arguments (got `%s')",
-		             TYPE_NAME(car(args).type));
+		             TYPE_NAME(type(car(args))));
 	}
 
 	return TRUE;
 }
 
-struct value
-builtin_cond(struct env *env, struct value v)
+value
+builtin_more(struct env *env, value v)
 {
-	if (list_length(env, v).integer < 0)
+	int sum = 0, first = 1;
+
+	for (value args = eval_list(env, v);
+	     type(args);
+	     args = cdr(args)) {
+		if (type(args) == VAL_ERROR) return args;
+
+		if (type(car(args)) == VAL_INT) {
+			if (first) sum = integer(car(args)), first = 0;
+			else if (integer(car(args)) <= sum)
+				return NIL;
+			continue;
+		}
+
+		return error(env,
+		             "builtin `<' takes only numeric"
+		             " arguments (got `%s')",
+		             TYPE_NAME(type(car(args))));
+	}
+
+	return TRUE;
+}
+
+value
+builtin_mod(struct env *env, value v)
+{
+	v = eval_list(env, v);
+	if (type(v) == VAL_ERROR) return v;
+	if (integer(list_length(env, v)) != 2)
+		return error(env, "builtin `%' takes two arguments");
+	if (type(car(v)) != VAL_INT || type(car(cdr(v))) != VAL_INT)
+		return error(env, "builtin `%' takes only"
+		             " numeric arguments");
+	return mkint(integer(car(v)) % integer(car(cdr(v))));
+}
+
+value
+builtin_cond(struct env *env, value v)
+{
+	if (integer(list_length(env, v)) < 0)
 		return error(env, "builtin `cond' requires arguments");
 
-	struct value cond = eval(env, car(v));
-	if (cond.type == VAL_ERROR) return cond;
-	if (cond.type == VAL_NIL) return NIL;
+	value cond = eval(env, car(v));
+	if (type(cond) == VAL_ERROR) return cond;
+	if (!type(cond)) return NIL;
 	return progn(env, cdr(v));
 }
 
-struct value
-builtin_if(struct env *env, struct value v)
+value
+builtin_if(struct env *env, value v)
 {
-	if (v.type == VAL_NIL)
+	if (!type(v))
 		return error(env, "`if' requires arguments");
 
-	if (cdr(v).type != VAL_CELL)
+	if (type(cdr(v)) != VAL_CELL)
 		return error(env, "missing body");
 
-	struct value cond = eval(env, car(v));
+	value cond = eval(env, car(v));
 
-	if (cond.type == VAL_ERROR)
+	if (type(cond) == VAL_ERROR)
 		return cond;
 
-	if (cond.type != VAL_NIL)
+	if (type(cond))
 		return eval(env, car(cdr(v)));
 
 	/* Otherwise do the else branches. */
 	return progn(env, cdr(cdr(v)));
 }
 
-struct value
-builtin_quote(struct env *env, struct value v)
+value
+builtin_quote(struct env *env, value v)
 {
 	(void)env;
-	if (v.type == VAL_NIL) return NIL;
+	if (!type(v)) return v;
 	return car(v);
 }
 
-struct value
-builtin_cons(struct env *env, struct value v)
+value
+builtin_cons(struct env *env, value v)
 {
-	struct value a = eval(env, car(v)),
+	value a = eval(env, car(v)),
 		b = eval(env, car(cdr(v)));
-	if (a.type == VAL_ERROR) return a;
-	if (b.type == VAL_ERROR) return b;
+	if (type(a) == VAL_ERROR) return a;
+	if (type(b) == VAL_ERROR) return b;
 	return cons(env, a, b);
 }
 
-struct value
-builtin_car(struct env *env, struct value v)
+value
+builtin_car(struct env *env, value v)
 {
-	if (v.type == VAL_NIL) return NIL;
+	if (!type(v)) return NIL;
 	v = eval(env, car(v));
-	if (v.type == VAL_ERROR) return v;
+	if (type(v) == VAL_ERROR) return v;
 	if (!IS_LIST(v))
 		return error(env,
 		             "builtin `car' requires a list argument"
 		             " (this is %s %s)",
-		             IS_VOWEL(*TYPE_NAME(v.type))
+		             IS_VOWEL(*TYPE_NAME(type(v)))
 		             ? "an" : "a",
-		             TYPE_NAME(v.type));
-	return v.type == VAL_NIL ? NIL : car(v);
+		             TYPE_NAME(type(v)));
+	return type(v) ? car(v) : v;
 }
 
-struct value
-builtin_cdr(struct env *env, struct value v)
+value
+builtin_cdr(struct env *env, value v)
 {
-	if (v.type == VAL_NIL) return NIL;
+	if (!type(v)) return NIL;
 	v = eval(env, car(v));
-	if (v.type == VAL_ERROR) return v;
+	if (type(v) == VAL_ERROR) return v;
 	if (!IS_LIST(v))
 		return error(env,
 		             "builtin `cdr' requires a list argument"
 		             " (this is %s %s)",
-		             IS_VOWEL(*TYPE_NAME(v.type))
+		             IS_VOWEL(*TYPE_NAME(type(v)))
 		             ? "an" : "a",
-		             TYPE_NAME(v.type));
+		             TYPE_NAME(type(v)));
 
-	return v.type == VAL_NIL ? NIL : cdr(v);
+	return type(v) ? cdr(v) : v;
 }
 
-struct value
-builtin_macro(struct env *env, struct value v)
+value
+builtin_macro(struct env *env, value v)
 {
-	if (v.type == VAL_NIL)
+	if (!type(v))
 		return error(env, "`defmacro' requires arguments");
 
-	if (cdr(v).type != VAL_CELL)
+	if (type(cdr(v)) != VAL_CELL)
 		return error(env, "missing list of parameters");
 
-	struct value fun = make_function(env, cdr(v), VAL_MACRO);
-	if (fun.type == VAL_ERROR) return fun;
+	value fun = make_function(env, cdr(v), VAL_MACRO);
+	if (type(fun) == VAL_ERROR) return fun;
 	name(fun) = kdgu_copy(string(car(v)));
 
 	return add_variable(env, car(v), fun);
 }
 
-struct value
-builtin_list(struct env *env, struct value list)
+value
+builtin_list(struct env *env, value list)
 {
 	return eval_list(env, list);
 }
 
-struct value
-builtin_progn(struct env *env, struct value v)
+value
+builtin_progn(struct env *env, value v)
 {
 	return progn(env, v);
 }
 
-struct value
-builtin_while(struct env *env, struct value v)
+value
+builtin_while(struct env *env, value v)
 {
-	if (v.type == VAL_NIL)
+	if (!type(v))
 		return error(env, "`while' requires arguments");
 
-	if (cdr(v).type != VAL_CELL)
+	if (type(cdr(v)) != VAL_CELL)
 		return error(env, "missing condition");
 
-	struct value c = NIL, r = NIL;
+	value c = NIL, r = NIL;
 
-	while (c = eval(env, car(v)), c.type != VAL_NIL) {
+	while (c = eval(env, car(v)), type(c)) {
 		r = progn(env, cdr(v));
-		if (r.type == VAL_ERROR) return r;
+		if (type(r) == VAL_ERROR) return r;
 	}
 
-	if (c.type == VAL_ERROR) return c;
+	if (type(c) == VAL_ERROR) return c;
 
 	return r;
 }
 
-struct value
-builtin_let(struct env *env, struct value v)
+value
+builtin_let(struct env *env, value v)
 {
-	if (list_length(env, v).integer < 1)
+	if (integer(list_length(env, v)) < 1)
 		return error(env, "builtin `let' requires"
 		             " at least one argument");
 
-	if (car(v).type != VAL_CELL)
+	if (type(car(v)) != VAL_CELL)
 		return error(env, "first argument to `let' must"
 		             " be an initializer list");
 
 	struct env *newenv = push_env(env, NIL, NIL);
 
-	for (struct value i = car(v); i.type != VAL_NIL; i = cdr(i)) {
-		if (car(i).type != VAL_CELL)
+	for (value i = car(v); type(i); i = cdr(i)) {
+		if (type(car(i)) != VAL_CELL)
 			return error(env, "invalid initializer"
 			             " in `let'");
 
-		struct value sym = car(car(i));
-		struct value val = eval(newenv, car(cdr(car(i))));
-		if (val.type == VAL_ERROR) return val;
+		value sym = car(car(i));
+		value val = eval(newenv, car(cdr(car(i))));
+		if (type(val) == VAL_ERROR) return val;
 		add_variable(newenv, sym, val);
 	}
 
 	return progn(newenv, cdr(v));
 }
 
-struct value
-builtin_nth(struct env *env, struct value v)
+value
+builtin_nth(struct env *env, value v)
 {
-	if (v.type != VAL_CELL
-	    || cdr(v).type != VAL_CELL
-	    || cdr(cdr(v)).type != VAL_NIL)
+	if (type(v) != VAL_CELL
+	    || type(cdr(v)) != VAL_CELL
+	    || type(cdr(cdr(v))))
 		return error(env,
 		             "builtin `nth' requires two arguments");
 
-	struct value i = eval(env, car(cdr(v)));
-	if (i.type == VAL_ERROR) return i;
-	if (i.type != VAL_INT)
+	value i = eval(env, car(cdr(v)));
+	if (type(i) == VAL_ERROR) return i;
+	if (type(i) != VAL_INT)
 		return error(env,
 		             "builtin `nth' requires a numeric second"
 		             " argument (this is %s %s)",
-		             IS_VOWEL(*TYPE_NAME(i.type))
+		             IS_VOWEL(*TYPE_NAME(type(i)))
 		             ? "an" : "a",
-		             TYPE_NAME(i.type));
+		             TYPE_NAME(type(i)));
 
-	if (i.integer < 0) return error(env, "index must be positive");
+	if (integer(i) < 0) return error(env, "index must be positive");
 
-	struct value val = eval(env, car(v));
-	if (val.type == VAL_ERROR) return val;
+	value val = eval(env, car(v));
+	if (type(val) == VAL_ERROR) return val;
 	if (!IS_LIST(val)
-	    && val.type != VAL_STRING)
+	    && type(val) != VAL_STRING)
 		return error(env,
 		             "builtin `nth' requires a list"
 		             " or string argument (this is %s %s)",
-		             IS_VOWEL(*TYPE_NAME(val.type))
+		             IS_VOWEL(*TYPE_NAME(type(val)))
 		             ? "an" : "a",
-		             TYPE_NAME(val.type));
+		             TYPE_NAME(type(val)));
 
 	/* `val` is either a list or a string now. */
 
-	if (val.type == VAL_NIL) return NIL;
+	if (!type(val)) return val;
 
 	int j = 0;
 	if (IS_LIST(val)) {
-		while (j < i.integer) {
-			if (cdr(val).type == VAL_NIL) return NIL;
+		while (j < integer(i)) {
+			if (!type(cdr(val))) return NIL;
 			val = cdr(val);
 			j++;
 		}
@@ -578,38 +617,38 @@ builtin_nth(struct env *env, struct value v)
 
 	unsigned idx = 0;
 
-	for (int j = 0; j < i.integer; j++)
+	for (int j = 0; j < integer(i); j++)
 		kdgu_next(string(val), &idx);
 
-	struct value str = gc_alloc(env, VAL_STRING);
+	value str = gc_alloc(env, VAL_STRING);
 	string(str) = kdgu_getchr(string(val), idx);
 	return str;
 }
 
-struct value
-builtin_length(struct env *env, struct value v)
+value
+builtin_length(struct env *env, value v)
 {
-	if (v.type == VAL_NIL)
+	if (!type(v))
 		return error(env, "builtin `length'"
 		             " requires arguments");
 
-	if (cdr(v).type != VAL_NIL)
+	if (type(cdr(v)))
 		return error(env, "builtin `length'"
 		             " takes only one argument");
 
-	struct value val = eval(env, car(v));
+	value val = eval(env, car(v));
 
 	if (IS_LIST(val)) {
 		return list_length(env, val);
-	} else if (val.type == VAL_STRING) {
-		return (struct value){VAL_INT,{kdgu_len(string(val))}};
+	} else if (type(val) == VAL_STRING) {
+		return mkint(kdgu_len(string(val)));
 	} else {
 		return error(env,
 		             "builtin `length' takes a list"
 		             " or string argument (this is %s %s)",
-		             IS_VOWEL(*TYPE_NAME(val.type))
+		             IS_VOWEL(*TYPE_NAME(type(val)))
 		             ? "an" : "a",
-		             TYPE_NAME(val.type));
+		             TYPE_NAME(type(val)));
 	}
 
 	/* Unreachable. */
@@ -621,22 +660,25 @@ builtin_length(struct env *env, struct value v)
  * TODO: Check up on this. It looks a bit messy.
  */
 
-struct value
-builtin_sed(struct env *env, struct value v)
+value
+builtin_sed(struct env *env, value v)
 {
-	if (list_length(env, v).integer != 4)
+	if (integer(list_length(env, v)) != 4)
 		return error(env, "builtin `sed'"
 		             " takes four arguments");
 
-	struct value pattern = eval(env, car(v));
-	struct value replace = eval(env, car(cdr(v)));
-	struct value options = eval(env, car(cdr(cdr(v))));
-	struct value subject = eval(env, car(cdr(cdr(cdr(v)))));
+	v = eval_list(env, v);
+	if (type(v) == VAL_ERROR) return v;
 
-	if (pattern.type != VAL_STRING
-	    || replace.type != VAL_STRING
-	    || options.type != VAL_STRING
-	    || subject.type != VAL_STRING)
+	value pattern = car(v);
+	value replace = car(cdr(v));
+	value options = car(cdr(cdr(v)));
+	value subject = car(cdr(cdr(cdr(v))));
+
+	if (type(pattern) != VAL_STRING
+	    || type(replace) != VAL_STRING
+	    || type(options) != VAL_STRING
+	    || type(subject) != VAL_STRING)
 		return error(env, "malformed `sed' application"
 		             " (all arguments must be strings)");
 
@@ -659,47 +701,50 @@ builtin_sed(struct env *env, struct value v)
 
 	if (!res) return subject;
 
-	struct value str = gc_alloc(env, VAL_STRING);
+	value str = gc_alloc(env, VAL_STRING);
 	string(str) = res;
 
 	return str;
 }
 
-struct value
-builtin_reverse(struct env *env, struct value v)
+value
+builtin_reverse(struct env *env, value v)
 {
-	if (list_length(env, v).integer != 1)
+	if (integer(list_length(env, v)) != 1)
 		return error(env, "builtin `reverse'"
 		             " takes one argument");
 	v = eval(env, car(v));
-	if (v.type == VAL_ERROR) return v;
+	if (type(v) == VAL_ERROR) return v;
 
-	struct value err = list_length(env, v);
-	if (err.type == VAL_ERROR) return err;
+	value err = list_length(env, v);
+	if (type(err) == VAL_ERROR) return err;
 
-	struct value ret = NIL;
+	value ret = NIL;
 
-	for (struct value i = v; i.type != VAL_NIL; i = cdr(i))
+	for (value i = v; type(i); i = cdr(i))
 		ret = cons(env, car(i), ret);
 
 	return ret;
 }
 
-struct value
-builtin_match(struct env *env, struct value v)
+value
+builtin_match(struct env *env, value v)
 {
-	if (list_length(env, v).integer != 3)
+	if (integer(list_length(env, v)) != 3)
 		return error(env, "builtin `match' takes"
 		             " three arguments");
 
 	v = eval_list(env, v);
-	if (v.type == VAL_ERROR) return v;
+	if (type(v) == VAL_ERROR) return v;
 
-	if (car(v).type != VAL_STRING
-	    || car(cdr(v)).type != VAL_STRING
-	    || car(cdr(cdr(v))).type != VAL_STRING)
-		return error(env, "builtin `match' takes"
-		             " only string arguments");
+	for (value i = v; type(i); i = cdr(i))
+		if (type(car(i)) != VAL_STRING)
+			return error(env, "builtin `match' takes"
+			             " only string arguments"
+			             " (this is %s %s)",
+			             IS_VOWEL(*TYPE_NAME(type(car(i))))
+			             ? "an" : "a",
+			             TYPE_NAME(type(car(i))));
 
 	kdgu *pattern = string(car(v));
 	int opt = KTRE_UNANCHORED;
@@ -726,13 +771,13 @@ builtin_match(struct env *env, struct value v)
 	if (!ktre_exec(re, string(car(cdr(cdr(v)))), &vec))
 		return NIL;
 
-	struct value ret = NIL;
+	value ret = NIL;
 
 	for (int i = 0; i < re->num_groups; i++) {
 		/* TODO: Deal with multiple matches. */
 		kdgu *str = ktre_getgroup(vec, 0, i, string(car(cdr(cdr(v)))));
 		if (!str) str = kdgu_news("");
-		struct value group = gc_alloc(env, VAL_STRING);
+		value group = gc_alloc(env, VAL_STRING);
 		string(group) = str;
 		ret = cons(env, group, ret);
 	}
@@ -740,39 +785,39 @@ builtin_match(struct env *env, struct value v)
 	return builtin_reverse(env, cons(env, quote(env, ret), NIL));
 }
 
-struct value
-builtin_expand(struct env *env, struct value v)
+value
+builtin_expand(struct env *env, value v)
 {
 	return expand(env, v);
 }
 
-struct value
-builtin_eval(struct env *env, struct value v)
+value
+builtin_eval(struct env *env, value v)
 {
-	if (list_length(env, v).integer != 1)
+	if (integer(list_length(env, v)) != 1)
 		return error(env, "builtin `eval' takes"
 		             " one argument");
 	return eval(env, eval(env, car(v)));
 }
 
-static struct value
+static value
 quickstring(struct env *env, const char *str)
 {
-	struct value v = gc_alloc(env, VAL_STRING);
+	value v = gc_alloc(env, VAL_STRING);
 	string(v) = kdgu_news(str);
 	return v;
 }
 
-struct value
-builtin_read_string(struct env *env, struct value v)
+value
+builtin_read_string(struct env *env, value v)
 {
-	if (list_length(env, v).integer != 1)
+	if (integer(list_length(env, v)) != 1)
 		return error(env, "builtin `read-string'"
 		             " takes one argument");
 
 	v = eval_list(env, v);
-	if (v.type == VAL_ERROR) return v;
-	if (car(v).type != VAL_STRING)
+	if (type(v) == VAL_ERROR) return v;
+	if (type(car(v)) != VAL_STRING)
 		return error(env, "argument to `read-string'"
 		             " must be a string");
 
@@ -788,8 +833,8 @@ builtin_read_string(struct env *env, struct value v)
 		             " `(' to begin s-expression in"
 		             " string contents");
 
-	struct value expr = parse(env, lexer);
-	if (expr.type == VAL_ERROR) return expr;
+	value expr = parse(env, lexer);
+	if (type(expr) == VAL_ERROR) return expr;
 
 	return cons(env,
 	            expr,
@@ -802,18 +847,18 @@ const char *help = "Birch is an IRC bot with a CL-like Lisp"
 	" and participate in development at "
 	"<https://github.com/KrokodileGlue/birch>.";
 
-struct value
-builtin_documentation(struct env *env, struct value v)
+value
+builtin_documentation(struct env *env, value v)
 {
-	if (v.type == VAL_NIL) {
-		struct value e = gc_alloc(env, VAL_STRING);
+	if (!type(v)) {
+		value e = gc_alloc(env, VAL_STRING);
 		string(e) = kdgu_news(help);
 		return e;
 	}
 
 	v = eval(env, car(v));
-	if (v.type == VAL_ERROR) return v;
-	if (v.type != VAL_FUNCTION && v.type != VAL_MACRO)
+	if (type(v) == VAL_ERROR) return v;
+	if (type(v) != VAL_FUNCTION && type(v) != VAL_MACRO)
 		return error(env, "`documentation' requires a"
 		             " function argument");
 
@@ -821,24 +866,22 @@ builtin_documentation(struct env *env, struct value v)
 	return docstring(v);
 }
 
-struct value
-builtin_streq(struct env *env, struct value v)
+value
+builtin_streq(struct env *env, value v)
 {
 	v = eval_list(env, v);
-	if (v.type == VAL_ERROR) return v;
+	if (type(v) == VAL_ERROR) return v;
 
-	for (struct value list = v;
-	     list.type != VAL_NIL;
-	     list = cdr(list)) {
-		if (cdr(list).type == VAL_NIL) return TRUE;
+	for (value list = v; type(list); list = cdr(list)) {
+		if (!type(cdr(list))) return TRUE;
 
-		int type = car(list).type != VAL_STRING
-			? car(list).type : car(cdr(list)).type;
+		int type = type(car(list)) != VAL_STRING
+			? type(car(list)) : type(car(cdr(list)));
 
-		if (car(list).type == VAL_ERROR)
+		if (type(car(list)) == VAL_ERROR)
 			return car(list);
 
-		if (car(cdr(list)).type == VAL_ERROR)
+		if (type(car(cdr(list))) == VAL_ERROR)
 			return car(cdr(list));
 
 		if (type != VAL_STRING)
@@ -858,22 +901,20 @@ builtin_streq(struct env *env, struct value v)
 	return TRUE;
 }
 
-struct value
-builtin_concatenate(struct env *env, struct value v)
+value
+builtin_concatenate(struct env *env, value v)
 {
-	if (list_length(env, v).integer < 3)
+	if (integer(list_length(env, v)) < 3)
 		return error(env, "builtin `concatenate' takes"
 		             " at least three arguments");
 
 	v = eval_list(env, v);
 
-	for (struct value list = v;
-	     list.type != VAL_NIL;
-	     list = cdr(list)) {
-		if (cdr(list).type == VAL_NIL) return TRUE;
+	for (value list = v; type(list); list = cdr(list)) {
+		if (!type(cdr(list))) return TRUE;
 
-		int type = car(list).type != VAL_STRING
-			? car(list).type : car(cdr(list)).type;
+		int type = type(car(list)) != VAL_STRING
+			? type(car(list)) : type(car(cdr(list)));
 
 		if (type != VAL_STRING)
 			return error(env, "`concatenate' takes only"
@@ -893,14 +934,12 @@ builtin_concatenate(struct env *env, struct value v)
 }
 
 static void
-append2(struct env *env, struct value list, struct value v)
+append2(struct env *env, value list, value v)
 {
-	struct value k = list;
+	value k = list;
 
-	while (cdr(k).type != VAL_NIL) {
-		if (IS_LIST(k)
-		    && cdr(k).type != VAL_NIL
-		    && !IS_LIST(cdr(k))) {
+	while (type(cdr(k))) {
+		if (IS_LIST(k) && type(cdr(k)) && !IS_LIST(cdr(k))) {
 			cdr(k) = cons(env, cdr(k), v);
 			return;
 		}
@@ -911,21 +950,21 @@ append2(struct env *env, struct value list, struct value v)
 	cdr(k) = v;
 }
 
-struct value
-builtin_backtick(struct env *env, struct value v)
+value
+builtin_backtick(struct env *env, value v)
 {
-	struct value head = gc_copy(env, car(v)),
+	value head = gc_copy(env, car(v)),
 		tail = head,
 		middle = tail;
 
-	while (tail.type != VAL_NIL) {
-		if (car(tail).type == VAL_COMMA) {
-			struct value tmp = eval(env, keyword(car(tail)));
-			if (tmp.type == VAL_ERROR) return tmp;
+	while (type(tail)) {
+		if (type(car(tail)) == VAL_COMMA) {
+			value tmp = eval(env, keyword(car(tail)));
+			if (type(tmp) == VAL_ERROR) return tmp;
 			tmp = cons(env, tmp, NIL);
 			append2(env, tmp, cdr(tail));
 
-			if (middle.obj == tail.obj) {
+			if (middle == tail) {
 				head = tmp;
 				middle = head;
 				tail = cdr(tail);
@@ -934,16 +973,16 @@ builtin_backtick(struct env *env, struct value v)
 				middle = tmp;
 				tail = cdr(tail);
 			}
-		} else if (car(tail).type == VAL_COMMAT) {
-			struct value tmp = eval(env, keyword(car(tail)));
-			if (tmp.type == VAL_ERROR) return tmp;
-			if (tmp.type != VAL_CELL)
+		} else if (type(car(tail)) == VAL_COMMAT) {
+			value tmp = eval(env, keyword(car(tail)));
+			if (type(tmp) == VAL_ERROR) return tmp;
+			if (type(tmp) != VAL_CELL)
 				return error(env, "expected a list");
 
 			tmp = gc_copy(env, tmp);
 			append2(env, tmp, cdr(tail));
 
-			if (middle.obj == tail.obj) {
+			if (middle == tail) {
 				head = tmp;
 				middle = head;
 				tail = cdr(tail);
@@ -953,12 +992,12 @@ builtin_backtick(struct env *env, struct value v)
 				tail = cdr(tail);
 			}
 		} else {
-			if (car(tail).type == VAL_CELL) {
+			if (type(car(tail)) == VAL_CELL) {
 				car(tail) = builtin_backtick(env, cons(env, car(tail), NIL));
-				if (car(tail).type == VAL_ERROR) return car(tail);
+				if (type(car(tail)) == VAL_ERROR) return car(tail);
 			}
 
-			if (tail.obj == middle.obj)
+			if (tail == middle)
 				tail = cdr(tail);
 			else {
 				tail = cdr(tail);
@@ -970,49 +1009,47 @@ builtin_backtick(struct env *env, struct value v)
 	return head;
 }
 
-struct value
-builtin_and(struct env *env, struct value v)
+value
+builtin_and(struct env *env, value v)
 {
-	for (struct value i = v; i.type != VAL_NIL; i = cdr(i)) {
-		struct value val = eval(env, car(i));
-		if (val.type == VAL_ERROR) return val;
-		if (val.type == VAL_NIL) return NIL;
+	for (value i = v; type(i); i = cdr(i)) {
+		value val = eval(env, car(i));
+		if (!type(val) || type(val) == VAL_ERROR)
+			return val;
 	}
 
 	return TRUE;
 }
 
-struct value
-builtin_or(struct env *env, struct value v)
+value
+builtin_or(struct env *env, value v)
 {
-	for (struct value i = v; i.type != VAL_NIL; i = cdr(i)) {
-		struct value val = eval(env, car(i));
-		if (val.type == VAL_ERROR) return val;
-		if (val.type != VAL_NIL) return TRUE;
+	for (value i = v; type(i); i = cdr(i)) {
+		value val = eval(env, car(i));
+		if (type(val) || type(val) == VAL_ERROR)
+			return val;
 	}
 
 	return NIL;
 }
 
-struct value
-builtin_append(struct env *env, struct value v)
+value
+builtin_append(struct env *env, value v)
 {
 	v = eval_list(env, v);
+	if (type(v) == VAL_ERROR) return v;
 
-	if (v.type == VAL_ERROR)
-		return v;
-
-	struct value out = gc_alloc(env, VAL_STRING);
+	value out = gc_alloc(env, VAL_STRING);
 	string(out) = kdgu_news("");
 
-	for (struct value i = v; i.type != VAL_NIL; i = cdr(i)) {
-		if (car(i).type == VAL_STRING) {
+	for (value i = v; type(i); i = cdr(i)) {
+		if (type(car(i)) == VAL_STRING) {
 			kdgu_append(string(out), string(car(i)));
 			continue;
 		}
 
-		struct value val = print_value(env, car(i));
-		if (val.type == VAL_ERROR) return val;
+		value val = print_value(env, car(i));
+		if (type(val) == VAL_ERROR) return val;
 
 		kdgu_append(string(out), string(val));
 	}
@@ -1020,32 +1057,32 @@ builtin_append(struct env *env, struct value v)
 	return out;
 }
 
-struct value
-builtin_subseq(struct env *env, struct value v)
+value
+builtin_subseq(struct env *env, value v)
 {
-	int len = list_length(env, v).integer;
+	int len = integer(list_length(env, v));
 	if (len != 2 && len != 3)
 		return error(env, "invalid number of arguments"
 		             " to builtin `subseq'");
 	v = eval_list(env, v);
-	if (v.type == VAL_ERROR) return v;
+	if (type(v) == VAL_ERROR) return v;
 
 	/* TODO: Lists, vectors, arrays. */
-	if (car(v).type != VAL_STRING)
+	if (type(car(v)) != VAL_STRING)
 		return NIL;
 
 	if (len == 2) {
-		struct value ret = gc_alloc(env, VAL_STRING);
-		unsigned a = car(cdr(v)).integer;
+		value ret = gc_alloc(env, VAL_STRING);
+		unsigned a = integer(car(cdr(v)));
 		unsigned b = string(car(v))->len;
 		string(ret) = kdgu_substr(string(car(v)), a, b);
 		if (!string(ret)) string(ret) = kdgu_news("");
 		return ret;
 	}
 
-	struct value ret = gc_alloc(env, VAL_STRING);
-	unsigned a = car(cdr(v)).integer;
-	unsigned b = car(cdr(cdr(v))).integer;
+	value ret = gc_alloc(env, VAL_STRING);
+	unsigned a = integer(car(cdr(v)));
+	unsigned b = integer(car(cdr(cdr(v))));
 
 	if (b > string(car(v))->len)
 		b = string(car(v))->len;
@@ -1056,29 +1093,30 @@ builtin_subseq(struct env *env, struct value v)
 	return ret;
 }
 
-struct value
-builtin_eq(struct env *env, struct value v)
+value
+builtin_eq(struct env *env, value v)
 {
-	if (v.type == VAL_NIL)
+	if (!type(v))
 		return error(env, "builtin `eq' requires arguments");
 
 	v = eval_list(env, v);
 
-	if (v.type == VAL_ERROR)
+	if (type(v) == VAL_ERROR)
 		return v;
 
 	/*
 	 * Use the first value as the reference value for comparison
 	 * against the rest of the list.
 	 */
-	struct value ref = car(v);
+	value ref = car(v);
 
-	for (struct value i = cdr(v); i.type != VAL_NIL; i = cdr(i)) {
-		struct value cmp = car(i);
-		if (ref.type != cmp.type) return NIL;
-		if (ref.type == VAL_INT && ref.integer != cmp.integer)
+	for (value i = cdr(v); type(i); i = cdr(i)) {
+		value cmp = car(i);
+		if (type(ref) != type(cmp)) return NIL;
+		if (type(ref) == VAL_INT
+		    && integer(ref) != integer(cmp))
 			return NIL;
-		else if (ref.obj != cmp.obj)
+		else if (ref != cmp)
 			return NIL;
 	}
 
@@ -1089,52 +1127,50 @@ builtin_eq(struct env *env, struct value v)
  * TODO: Implement formatted strings.
  */
 
-struct value
-builtin_error(struct env *env, struct value v)
+value
+builtin_error(struct env *env, value v)
 {
-	if (list_length(env, v).integer != 1)
+	if (integer(list_length(env, v)) != 1)
 		return error(env, "builtin `error' takes"
 		             " one argument");
 	v = eval_list(env, v);
-	if (v.type == VAL_ERROR) return v;
-	if (car(v).type != VAL_STRING)
+	if (type(v) == VAL_ERROR) return v;
+	if (type(car(v)) != VAL_STRING)
 		return error(env, "argument to `error'"
 		             " must be a string");
 	return error(env, tostring(string(car(v))));
 }
 
-struct value
-builtin_with_demoted_errors(struct env *env, struct value v)
+value
+builtin_with_demoted_errors(struct env *env, value v)
 {
-	struct value ret = progn(env, v);
-	if (ret.type == VAL_ERROR) return print_value(env, ret);
+	value ret = progn(env, v);
+	if (type(ret) == VAL_ERROR) return print_value(env, ret);
 	return ret;
 }
 
-struct value
-builtin_boundp(struct env *env, struct value v)
+value
+builtin_boundp(struct env *env, value v)
 {
-	if (list_length(env, v).integer != 1)
+	if (integer(list_length(env, v)) != 1)
 		return error(env, "builtin `boundp'"
 		             " takes one argument");
 	v = eval(env, car(v));
-	if (v.type == VAL_ERROR) return v;
-	if (v.type != VAL_SYMBOL)
+	if (type(v) == VAL_ERROR) return v;
+	if (type(v) != VAL_SYMBOL)
 		return error(env, "argument to `boundp'"
 		             " must be a symbol");
-	return find(env, v).type == VAL_NIL ? NIL : TRUE;
+	return type(find(env, v)) ? TRUE : NIL;
 }
 
 #define TYPE_PREDICATE(X,Y)	  \
-	struct value \
-	builtin_ ## X ## p(struct env *env, struct value v) \
+	value \
+	builtin_ ## X ## p(struct env *env, value v) \
 	{ \
 		v = eval_list(env, v); \
-		if (v.type == VAL_ERROR) return v; \
-		for (struct value i = v; \
-		     i.type != VAL_NIL; \
-		     i = cdr(i)) \
-			if (car(i).type != Y) \
+		if (type(v) == VAL_ERROR) return v; \
+		for (value i = v; type(i); i = cdr(i)) \
+			if (type(car(i)) != Y) \
 				return NIL; \
 		return TRUE; \
 	}
@@ -1192,6 +1228,8 @@ load_builtins(struct env *env)
 	add_builtin(env, "/",       builtin_div);
 	add_builtin(env, "=",       builtin_inteq);
 	add_builtin(env, "<",       builtin_less);
+	add_builtin(env, ">",       builtin_more);
+	add_builtin(env, "%",       builtin_mod);
 	add_builtin(env, "sed",     builtin_sed);
 	add_builtin(env, "and",     builtin_and);
 	add_builtin(env, "or",      builtin_or);

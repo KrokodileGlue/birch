@@ -49,4 +49,4 @@ void send_value(struct birch *b,
                 struct env *env,
                 const char *server,
                 const char *channel,
-                struct value v);
+                value v);

@@ -272,23 +272,23 @@ birch_config(struct birch *b, const char *path)
 
 	struct env *env = b->env;
 	struct lexer *lexer = new_lexer("*command*", code);
-	struct value expr = NIL;
+	value expr = NIL;
 
 	do {
 		struct token *t = tok(lexer);
 
 		if (!t) {
-			struct value init = find(env, make_symbol(env, "init"));
+			value init = find(env, make_symbol(env, "init"));
 			/* TODO */
-			if (init.type == VAL_NIL) exit(1);
-			struct value call = gc_alloc(env, VAL_CELL);
+			if (type(init) == VAL_NIL) exit(1);
+			value call = gc_alloc(env, VAL_CELL);
 
 			car(call) = cdr(init);
 			cdr(call) = NIL;
 
-			struct value val = eval(env, call);
+			value val = eval(env, call);
 
-			if (val.type == VAL_ERROR) {
+			if (type(val) == VAL_ERROR) {
 				puts(tostring(string(val)));
 				puts(tostring(string(print_value(env, expr))));
 				return 1;
@@ -301,19 +301,19 @@ birch_config(struct birch *b, const char *path)
 
 		expr = parse(env, lexer);
 
-		if (expr.type == VAL_ERROR) {
+		if (type(expr) == VAL_ERROR) {
 			puts(tostring(string(expr)));
 			return 1;
 		}
 
-		struct value val = eval(env, expr);
+		value val = eval(env, expr);
 
-		if (val.type == VAL_ERROR) {
+		if (type(val) == VAL_ERROR) {
 			puts(tostring(string(val)));
 			puts(tostring(string(print_value(env, expr))));
 			return 1;
 		}
-	} while (expr.type != VAL_NIL);
+	} while (type(expr) != VAL_NIL);
 
 	return 0;
 }
@@ -323,13 +323,13 @@ send_value(struct birch *b,
            struct env *env,
            const char *server,
            const char *channel,
-           struct value v)
+           value v)
 {
-	struct value print = v.type == VAL_STRING
+	value print = type(v) == VAL_STRING
 		? v : print_value(env, v);
 
 	/* TODO: This can only happen when the print itself fails. */
-	if (print.type == VAL_ERROR) return;
+	if (type(print) == VAL_ERROR) return;
 
 	kdgu *thing = string(print);
 

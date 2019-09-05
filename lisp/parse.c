@@ -9,7 +9,7 @@
 #include "eval.h"
 #include "gc.h"
 
-static struct value
+static value
 parse_expr(struct env *env, struct lexer *l)
 {
 	struct token *t = tok(l);
@@ -28,14 +28,14 @@ parse_expr(struct env *env, struct lexer *l)
 	case '~':  return backtick(env, parse_expr(env, l));
 
 	case ',': {
-		struct value v = gc_alloc(env, l->s[l->idx] == '@'
+		value v = gc_alloc(env, l->s[l->idx] == '@'
 		                          ? VAL_COMMAT : VAL_COMMA);
 		if (l->s[l->idx] == '@') {
 			l->idx++;
-			v.type = VAL_COMMAT;
+			type(v) = VAL_COMMAT;
 			keyword(v) = parse_expr(env, l);
 		} else {
-			v.type = VAL_COMMA;
+			type(v) = VAL_COMMA;
 			keyword(v) = parse_expr(env, l);
 		}
 
@@ -44,26 +44,19 @@ parse_expr(struct env *env, struct lexer *l)
 
 	/* Keyword. */
 	case '&': {
-		struct value v = gc_alloc(env, VAL_KEYWORD);
-
+		value v = gc_alloc(env, VAL_KEYWORD);
 		keyword(v) = parse_expr(env, l);
-
-		if (keyword(v).type != VAL_SYMBOL) {
+		if (type(keyword(v)) != VAL_SYMBOL)
 			return error(env, "expected a symbol");
-		}
-
 		return v;
 	} break;
 
 	/* Keyword parameter. */
 	case ':': {
-		struct value v = gc_alloc(env, VAL_KEYWORDPARAM);
-
+		value v = gc_alloc(env, VAL_KEYWORDPARAM);
 		keyword(v) = parse_expr(env, l);
-
-		if (keyword(v).type != VAL_SYMBOL)
+		if (type(keyword(v)) != VAL_SYMBOL)
 			return error(env, "expected a symbol");
-
 		return v;
 	} break;
 
@@ -71,12 +64,12 @@ parse_expr(struct env *env, struct lexer *l)
 		return make_symbol(env, t->body);
 
 	case TOK_STR: {
-		struct value v = gc_alloc(env, VAL_STRING);
+		value v = gc_alloc(env, VAL_STRING);
 		string(v) = kdgu_copy(t->s);
 		return v;
 	} break;
 
-	case TOK_INT: return (struct value){VAL_INT, {t->i}};
+	case TOK_INT: return mkint(t->i);
 
 	default:
 		return error(env, "unexpected `%s'", t->body);
@@ -85,31 +78,31 @@ parse_expr(struct env *env, struct lexer *l)
 	return error(env, "you shouldn't see this");
 }
 
-struct value
+value
 parse(struct env *env, struct lexer *l)
 {
-	struct value head = NIL, tail = NIL;
+	value head = NIL, tail = NIL;
 
 	for (;;) {
-		struct value o = parse_expr(env, l);
+		value o = parse_expr(env, l);
 
-		if (o.type == VAL_ERROR)
+		if (type(o) == VAL_ERROR)
 			return o;
 
-		if (o.type == VAL_EOF)
+		if (type(o) == VAL_EOF)
 			return error(env, "unmatched `('");
 
-		if (o.type == VAL_RPAREN)
+		if (type(o) == VAL_RPAREN)
 			return head;
 
-		if (o.type == VAL_DOT) {
+		if (type(o) == VAL_DOT) {
 			cdr(tail) = parse_expr(env, l);
-			if (parse_expr(env, l).type != VAL_RPAREN)
+			if (type(parse_expr(env, l)) != VAL_RPAREN)
 				return error(env, "expected `)'");
 			return head;
 		}
 
-		if (head.type == VAL_NIL) {
+		if (type(head) == VAL_NIL) {
 			head = cons(env, o, NIL);
 			tail = head;
 			continue;

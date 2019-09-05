@@ -35,25 +35,25 @@ const char **value_name = (const char *[]){
 	"error",
 };
 
-struct value
-quote(struct env *env, struct value v)
+value
+quote(struct env *env, value v)
 {
 	return cons(env, make_symbol(env, "quote"), cons(env, v, NIL));
 }
 
-struct value
-backtick(struct env *env, struct value v)
+value
+backtick(struct env *env, value v)
 {
 	return cons(env, make_symbol(env, "backtick"), cons(env,v, NIL));
 }
 
-struct value
-list_length(struct env *env, struct value list)
+value
+list_length(struct env *env, value list)
 {
 	int len = 0;
 
-	while (list.type != VAL_NIL) {
-		if (list.type == VAL_CELL) {
+	while (type(list) != VAL_NIL) {
+		if (type(list) == VAL_CELL) {
 			list = cdr(list);
 			len++;
 			continue;
@@ -62,16 +62,16 @@ list_length(struct env *env, struct value list)
 		return error(env, "a non-dotted list was expected");
 	}
 
-	return (struct value){VAL_INT, {len}};
+	return mkint(len);
 }
 
-struct value
-print_value(struct env *env, struct value v)
+value
+print_value(struct env *env, value v)
 {
 	kdgu *out = kdgu_news("");
 	char buf[256];
 
-	switch (v.type) {
+	switch (type(v)) {
 	case VAL_COMMA:
 		kdgu_chrappend(out, ',');
 		/* TODO: Ensure print_value returns a string. */
@@ -84,7 +84,7 @@ print_value(struct env *env, struct value v)
 		kdgu_chrappend(out, '"');
 		break;
 	case VAL_INT:
-		sprintf(buf, "%d", v.integer);
+		sprintf(buf, "%d", integer(v));
 		out = kdgu_news(buf);
 		break;
 	case VAL_TRUE: out = kdgu_news("t");        break;
@@ -114,16 +114,16 @@ print_value(struct env *env, struct value v)
 	case VAL_CELL:
 		kdgu_chrappend(out, '(');
 
-		while (v.type == VAL_CELL) {
-			struct value e = print_value(env, car(v));
-			if (e.type == VAL_ERROR) return e;
+		while (type(v) == VAL_CELL) {
+			value e = print_value(env, car(v));
+			if (type(e) == VAL_ERROR) return e;
 			kdgu_append(out, string(e));
-			if (cdr(v).type == VAL_CELL)
+			if (type(cdr(v)) == VAL_CELL)
 				kdgu_chrappend(out, ' ');
 			v = cdr(v);
 		}
 
-		if (v.type != VAL_NIL) {
+		if (type(v) != VAL_NIL) {
 			kdgu_chrappend(out, ' ');
 			/*
 			 * TODO: This can break and probably other
@@ -144,82 +144,82 @@ print_value(struct env *env, struct value v)
 		return error(env,
 		             "bug: unimplemented printer for"
 		             " expression of type `%s' (%d)",
-		             TYPE_NAME(v.type), v.type);
+		             TYPE_NAME(type(v)), type(v));
 	}
 
-	struct value e = gc_alloc(env, VAL_STRING);
+	value e = gc_alloc(env, VAL_STRING);
 	string(e) = out;
 
 	return e;
 }
 
-struct value
-cons(struct env *env, struct value car, struct value cdr)
+value
+cons(struct env *env, value car, value cdr)
 {
-	struct value v = gc_alloc(env, VAL_CELL);
+	value v = gc_alloc(env, VAL_CELL);
 	car(v) = car;
 	cdr(v) = cdr;
 	return v;
 }
 
-struct value
-acons(struct env *env, struct value x, struct value y, struct value a)
+value
+acons(struct env *env, value x, value y, value a)
 {
-	struct value left = cons(env, x, y);
-	struct value ret = cons(env, left, a);
+	value left = cons(env, x, y);
+	value ret = cons(env, left, a);
 	return ret;
 }
 
-struct value
+value
 make_symbol(struct env *env, const char *s)
 {
 	if (!strcmp(s, "nil")) return NIL;
 	if (!strcmp(s, "t")) return TRUE;
 
-	struct value sym = gc_alloc(env, VAL_SYMBOL);
+	value sym = gc_alloc(env, VAL_SYMBOL);
 	string(sym) = kdgu_news(s);
 
 	return sym;
 }
 
-struct value
-expand(struct env *env, struct value v)
+value
+expand(struct env *env, value v)
 {
-	if (v.type != VAL_CELL || car(v).type != VAL_SYMBOL)
+	if (type(v) != VAL_CELL || type(car(v)) != VAL_SYMBOL)
 		return v;
 
-	struct value bind = find(env, car(v));
+	value bind = find(env, car(v));
 
-	if (bind.type == VAL_NIL || cdr(bind).type != VAL_MACRO)
+	if (type(bind) == VAL_NIL || type(cdr(bind)) != VAL_MACRO)
 		return v;
 
-	struct value fn = cdr(bind), args = cdr(v);
+	value fn = cdr(bind), args = cdr(v);
 
 	struct env *newenv = push_env(env, function(fn).param, args);
 
-	for (struct value opt = function(fn).optional;
-	     opt.type != VAL_NIL;
+	for (value opt = function(fn).optional;
+	     type(opt) != VAL_NIL;
 	     opt = cdr(opt)) {
-		struct value bind = find(newenv, car(car(opt)));
+		value bind = find(newenv, car(car(opt)));
 
-		if (bind.type == VAL_NIL)
+		if (type(bind) == VAL_NIL)
 			add_variable(newenv,
 			             car(car(opt)),
 			             cdr(car(opt)));
-		else if (cdr(bind).type == VAL_NIL)
+		else if (type(cdr(bind)) == VAL_NIL)
 			cdr(bind) = cdr(car(opt));
 	}
 
-	if (rest(fn).type != VAL_NIL) {
-		struct value p = function(fn).param, q = args;
+	if (type(rest(fn)) != VAL_NIL) {
+		value p = function(fn).param, q = args;
 
-		while (p.type != VAL_NIL) {
+		while (type(p) != VAL_NIL) {
 			p = cdr(p), q = cdr(q);
-			if (q.type == VAL_NIL) break;
+			if (type(q) == VAL_NIL) break;
 		}
 
 		add_variable(newenv, function(fn).rest,
-		             q.type != VAL_NIL ? q : NIL);
+		             type(q) != VAL_NIL ? q : NIL);
 	}
 
 	return progn(newenv, function(fn).body);
@@ -227,16 +227,13 @@ expand(struct env *env, struct value v)
 
 /*
  * Looks up `sym` in `env`, moving up into higher lexical scopes as
- * necessary. `sym` is assumed to be a `VAL_SYMBOL`. returns NULL if
+ * necessary. `sym` is assumed to be a `VAL_SYMBOL`. returns NIL if
  * the symbol could not be resolved.
  */
 
-struct value
-find(struct env *env, struct value sym)
+value
+find(struct env *env, value sym)
 {
-	/* Use this function carefully! */
-	assert(sym.type == VAL_SYMBOL);
-
 	/*
 	 * We've walked up through every scope and haven't found the
 	 * symbol. It must not exist.
@@ -244,10 +241,13 @@ find(struct env *env, struct value sym)
 
 	if (!env) return NIL;
 
-	for (struct value c = env->vars;
-	     c.type != VAL_NIL;
+	/* Use this function carefully! */
+	assert(type(sym) == VAL_SYMBOL);
+
+	for (value c = env->vars;
+	     type(c) != VAL_NIL;
 	     c = cdr(c)) {
-		struct value bind = car(c);
+		value bind = car(c);
 		if (kdgu_cmp(string(sym),
 		             string(car(bind)),
 		             false,
@@ -258,10 +258,10 @@ find(struct env *env, struct value sym)
 	return find(env->up, sym);
 }
 
-struct value
-add_variable(struct env *env, struct value sym, struct value body)
+value
+add_variable(struct env *env, value sym, value body)
 {
-	assert(sym.type == VAL_SYMBOL);
+	assert(type(sym) == VAL_SYMBOL);
 	env->vars = acons(env, sym, body, env->vars);
 	return body;
 }
@@ -269,9 +269,9 @@ add_variable(struct env *env, struct value sym, struct value body)
 void
 add_builtin(struct env *env, const char *name, builtin *f)
 {
-	struct value sym = make_symbol(env, name);
-	struct value prim = gc_alloc(env, VAL_BUILTIN);
-	if (prim.type == VAL_NIL) return;
+	value sym = make_symbol(env, name);
+	value prim = gc_alloc(env, VAL_BUILTIN);
+	if (type(prim) == VAL_NIL) return;
 	builtin(prim) = f;
 	add_variable(env, sym, prim);
 }
@@ -313,6 +313,13 @@ new_environment(struct birch *b,
 	env->depth = 0;
 	b->env = env;
 
+	/* Initialize constant values. */
+	NIL = gc_alloc(env, VAL_NIL);
+	DOT = gc_alloc(env, VAL_DOT);
+	RPAREN = gc_alloc(env, VAL_RPAREN);
+	TRUE = gc_alloc(env, VAL_TRUE);
+	VEOF = gc_alloc(env, VAL_EOF);
+
 	/*
 	 * Note: These should only be done here (in the initialization
 	 * for the global environment) because it's redundant to load
@@ -326,7 +333,7 @@ new_environment(struct birch *b,
 }
 
 struct env *
-make_env(struct env *env, struct value map)
+make_env(struct env *env, value map)
 {
 	struct env *r = malloc(sizeof *r);
 	memcpy(r, env, sizeof *r);
@@ -336,11 +343,11 @@ make_env(struct env *env, struct value map)
 }
 
 struct env *
-push_env(struct env *env, struct value vars, struct value values)
+push_env(struct env *env, value vars, value values)
 {
-	struct value map = NIL, p = vars, q = values;
+	value map = NIL, p = vars, q = values;
 
-	while (p.type == VAL_CELL && q.type == VAL_CELL) {
+	while (type(p) == VAL_CELL && type(q) == VAL_CELL) {
 		map = acons(env, car(p), car(q), map);
 		p = cdr(p), q = cdr(q);
 	}

@@ -21,28 +21,28 @@
  * given the empty list.
  */
 
-struct value
-progn(struct env *env, struct value list)
+value
+progn(struct env *env, value list)
 {
-	struct value r = NIL;
+	value r = NIL;
 
-	for (struct value lp = list;
-	     lp.type != VAL_NIL;
+	for (value lp = list;
+	     type(lp) != VAL_NIL;
 	     lp = cdr(lp)) {
 		r = eval(env, car(lp));
-		if (r.type == VAL_ERROR)
+		if (type(r) == VAL_ERROR)
 			return r;
 	}
 
 	return r;
 }
 
-static struct value
-append(struct env *env, struct value list, struct value v)
+static value
+append(struct env *env, value list, value v)
 {
-	if (list.type == VAL_NIL) return cons(env, v, NIL);
-	struct value k = list;
-	while (cdr(k).type != VAL_NIL) k = cdr(k);
+	if (type(list) == VAL_NIL) return cons(env, v, NIL);
+	value k = list;
+	while (type(cdr(k)) != VAL_NIL) k = cdr(k);
 	cdr(k) = cons(env, v, NIL);
 	return list;
 }
@@ -55,29 +55,29 @@ append(struct env *env, struct value list, struct value v)
  * expanded.
  */
 
-static struct value
+static value
 apply(struct env *env,
-      struct value fn,
-      struct value fnargs)
+      value fn,
+      value fnargs)
 {
-	if (fn.type == VAL_BUILTIN)
+	if (type(fn) == VAL_BUILTIN)
 		return (builtin(fn))(env, fnargs);
 
 	/* If it's not a builtin it must be a function. */
 
-	if (fn.type != VAL_FUNCTION)
+	if (type(fn) != VAL_FUNCTION)
 		return error(env, "function application requires"\
 		             " a function value (this is %s %s)",
-		             IS_VOWEL(*TYPE_NAME(fn.type))
+		             IS_VOWEL(*TYPE_NAME(type(fn)))
 		             ? "an" : "a",
-		             TYPE_NAME(fn.type));;
+		             TYPE_NAME(type(fn)));;
 
-	struct value args = NIL, keys = NIL;
+	value args = NIL, keys = NIL;
 
-	for (struct value arg = fnargs;
-	     arg.type != VAL_NIL;
+	for (value arg = fnargs;
+	     type(arg) != VAL_NIL;
 	     arg = cdr(arg)) {
-		if (car(arg).type == VAL_KEYWORDPARAM) {
+		if (type(car(arg)) == VAL_KEYWORDPARAM) {
 			keys = append(env, keys,
 			              cons(env, keyword(car(arg)),
 			                   car(cdr(arg))));
@@ -89,61 +89,61 @@ apply(struct env *env,
 
 	/* This is kinda complicated. */
 
-	if (list_length(env, args).integer
-	    < list_length(env, function(fn).param).integer
-	    - list_length(env, function(fn).optional).integer
-	    - list_length(env, function(fn).key).integer)
-		return error(env, "invalid number of arguments");
+	if (integer(list_length(env, args))
+	    < integer(list_length(env, function(fn).param))
+	    - integer(list_length(env, function(fn).optional))
+	    - integer(list_length(env, function(fn).key)))
+	    return error(env, "invalid number of arguments");
 
-	if (list_length(env, args).integer
-	    > list_length(env, function(fn).param).integer
-	    && function(fn).rest.type == VAL_NIL)
+	if (integer(list_length(env, args))
+	    > integer(list_length(env, function(fn).param))
+	    && type(rest(fn)) == VAL_NIL)
 		return error(env, "too many arguments");
 
 	args = eval_list(env, args);
-	if (args.type == VAL_ERROR) return args;
+	if (type(args) == VAL_ERROR) return args;
 	struct env *newenv = push_env(env, function(fn).param, args);
 
-	for (struct value opt = function(fn).optional;
-	     opt.type != VAL_NIL;
+	for (value opt = function(fn).optional;
+	     type(opt) != VAL_NIL;
 	     opt = cdr(opt)) {
-		struct value bind = find(newenv, car(car(opt)));
+		value bind = find(newenv, car(car(opt)));
 
-		if (bind.type == VAL_NIL)
+		if (type(bind) == VAL_NIL)
 			add_variable(newenv, car(car(opt)), cdr(car(opt)));
-		else if (cdr(bind).type == VAL_NIL)
+		else if (type(cdr(bind)) == VAL_NIL)
 			cdr(bind) = cdr(car(opt));
 	}
 
-	for (struct value key = function(fn).key;
-	     key.type != VAL_NIL;
+	for (value key = function(fn).key;
+	     type(key) != VAL_NIL;
 	     key = cdr(key)) {
-		struct value bind = find(newenv, car(car(key)));
-		if (bind.type == VAL_NIL)
+		value bind = find(newenv, car(car(key)));
+		if (type(bind) == VAL_NIL)
 			add_variable(newenv, car(car(key)), car(car(key)));
-		else if (cdr(bind).type == VAL_NIL)
+		else if (type(cdr(bind)) == VAL_NIL)
 			cdr(bind) = cdr(car(key));
 	}
 
-	if (rest(fn).type != VAL_NIL) {
-		struct value p = function(fn).param, q = args;
+	if (type(rest(fn)) != VAL_NIL) {
+		value p = function(fn).param, q = args;
 
-		while (p.type != VAL_NIL) {
+		while (type(p) != VAL_NIL) {
 			p = cdr(p), q = cdr(q);
-			if (q.type == VAL_NIL) break;
+			if (type(q) == VAL_NIL) break;
 		}
 
-		if (q.type != VAL_NIL)
+		if (type(q) != VAL_NIL)
 			add_variable(newenv, function(fn).rest, q);
 		else
 			add_variable(newenv, function(fn).rest, NIL);
 	}
 
-	for (struct value key = keys;
-	     key.type != VAL_NIL;
+	for (value key = keys;
+	     type(key) != VAL_NIL;
 	     key = cdr(key)) {
-		struct value bind = find(newenv, car(car(key)));
-		if (bind.type == VAL_NIL)
+		value bind = find(newenv, car(car(key)));
+		if (type(bind) == VAL_NIL)
 			add_variable(newenv, car(car(key)), cdr(car(key)));
 		else cdr(bind) = cdr(car(key));
 	}
@@ -157,23 +157,23 @@ apply(struct env *env,
  * in an error, evaluation is stopped and the error is returned.
  */
 
-struct value
-eval_list(struct env *env, struct value list)
+value
+eval_list(struct env *env, value list)
 {
-	struct value head = NIL, tail = NIL;
+	value head = NIL, tail = NIL;
 
-	for (struct value l = list;
-	     l.type != VAL_NIL;
+	for (value l = list;
+	     type(l) != VAL_NIL;
 	     l = cdr(l)) {
 		if (!IS_LIST(l) || !IS_LIST(cdr(l)))
 			return list_length(env, l);
 
-		struct value tmp = eval(env, car(l));
+		value tmp = eval(env, car(l));
 
-		if (tmp.type == VAL_ERROR)
+		if (type(tmp) == VAL_ERROR)
 			return tmp;
 
-		if (head.type == VAL_NIL) {
+		if (type(head) == VAL_NIL) {
 			head = tail = cons(env, tmp, NIL);
 			continue;
 		}
@@ -189,8 +189,8 @@ eval_list(struct env *env, struct value list)
  * Evaluates a node and returns the result.
  */
 
-struct value
-eval(struct env *env, struct value v)
+value
+eval(struct env *env, value v)
 {
 	env->birch->env->depth++;
 
@@ -201,9 +201,9 @@ eval(struct env *env, struct value v)
 		return error(env, "s-expression too complicated");
 	}
 
-	struct value ret = NIL;
+	value ret = NIL;
 
-	switch (v.type) {
+	switch (type(v)) {
 	/*
 	 * These are values that don't require any further
 	 * interpretation.
@@ -228,17 +228,17 @@ eval(struct env *env, struct value v)
 	 */
 
 	case VAL_CELL: {
-		struct value expanded = expand(env, v);
+		value expanded = expand(env, v);
 
-		if (expanded.obj != v.obj) {
+		if (expanded != v) {
 			ret = eval(env, expanded);
 			break;
 		}
 
-		struct value fn = eval(env, car(v));
-		struct value args = cdr(v);
+		value fn = eval(env, car(v));
+		value args = cdr(v);
 
-		if (fn.type == VAL_ERROR) {
+		if (type(fn) == VAL_ERROR) {
 			ret = fn;
 			break;
 		}
@@ -253,9 +253,9 @@ eval(struct env *env, struct value v)
 	 */
 
 	case VAL_SYMBOL: {
-		struct value bind = find(env, v);
+		value bind = find(env, v);
 
-		if (bind.type == VAL_NIL) {
+		if (type(bind) == VAL_NIL) {
 			ret = error(env, "evaluation of unbound symbol `%s'",
 			            tostring(string(v)));
 			break;
@@ -276,7 +276,7 @@ eval(struct env *env, struct value v)
 	return ret;
 }
 
-struct value
+value
 eval_string(struct env *env, const char *code)
 {
 	struct lexer *lexer = new_lexer("*string*", code);
@@ -288,7 +288,7 @@ eval_string(struct env *env, const char *code)
 
 	#include "parse.h"
 
-	struct value v = parse(env, lexer);
-	if (v.type == VAL_ERROR) return v;
+	value v = parse(env, lexer);
+	if (type(v) == VAL_ERROR) return v;
 	return eval(env, v);
 }

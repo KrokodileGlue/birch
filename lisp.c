@@ -36,10 +36,10 @@ lisp_init(struct birch *b)
 	            "current-channel", builtin_current_channel);
 }
 
-static struct value
+static value
 quickstring(struct env *env, const char *str)
 {
-	struct value v = gc_alloc(env, VAL_STRING);
+	value v = gc_alloc(env, VAL_STRING);
 	string(v) = kdgu_news(str);
 	return v;
 }
@@ -50,28 +50,28 @@ do_msg_hook(struct birch *b,
             struct env *env,
             struct line *l)
 {
-	struct value bind = find(env, make_symbol(env, "msg-hook"));
-	if (bind.type == VAL_NIL) return;
+	value bind = find(env, make_symbol(env, "msg-hook"));
+	if (type(bind) == VAL_NIL) return;
 
-	struct value arg = NIL;
+	value arg = NIL;
 
 	arg = cons(env, quickstring(env, l->trailing), arg);
 	arg = cons(env, quickstring(env, l->nick), arg);
 	arg = cons(env, quickstring(env, l->date), arg);
 	arg = quote(env, arg);
 
-	for (struct value hook = cdr(bind);
-	     hook.type != VAL_NIL;
+	for (value hook = cdr(bind);
+	     type(hook) != VAL_NIL;
 	     hook = cdr(hook)) {
-		struct value res = eval(env,
+		value res = eval(env,
 		                        cons(env,
 		                             car(hook),
 		                             cons(env, arg, NIL)));
-		if (res.type == VAL_ERROR) {
+		if (type(res) == VAL_ERROR) {
 			puts("msg-hook error:");
 			puts(tostring(string(res)));
 			puts(tostring(string(print_value(env, car(hook)))));
-		} else if (res.type != VAL_NIL) {
+		} else if (type(res) != VAL_NIL) {
 			send_value(b, env, server, l->middle[0], res);
 		}
 	}
