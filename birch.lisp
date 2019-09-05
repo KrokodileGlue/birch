@@ -413,5 +413,27 @@ the pattern described by it."
   (setq x (sed "\bc\b" "C" "gi" x))
   x)
 
+(defmacro mpan-user (nick &optional pattern)
+  "Return the mpan translation of the last message said by NICK \
+in the current channel that matches PATTERN, or nil if NICK has not \
+said anything."
+  (let ((string (if pattern
+		    (find-message (append nick) pattern)
+		  (find-message (append nick) ""))))
+    (if string (mpanize string))))
+
+(defmacro mpan (&optional nick pattern)
+  "mpan something someone said. The optional arguments NICK and \
+PATTERN allow you to narrow down your mpanage to a particular \
+message."
+  (let ((result (if (not nick)
+		    ;; If there's no nick then do the last line.
+		    (mpanize (nth (car log) 2))
+		  ;; Otherwise actually mpan the user.
+		  (eval ~(mpan-user ,nick ,pattern)))))
+    (if result
+	result
+      (append "No matching message found for " nick "."))))
+
 (in "freenode/##c-offtopic" defq trigger "\.")
 (in "kroknet/#test2" defq trigger "\.")
