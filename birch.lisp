@@ -371,9 +371,9 @@ the pattern described by it."
   (setq x (sed "([^[:punct:]]|\))$" "\0." "" x))
   (setq x (append x " " (mpan-phrase)))
   (let ((n 1))
-    (while (match "\([[:word:]].*?\)(?!\w)" "" x)
+    (while (match "\(([[:word:]].*?)\)(?!\w)(.*)" "" x)
       (cond (= n 1) (setq x (append x " |")))
-      (setq x (sed "\([[:word:]].*?\)(?!\w)"
+      (setq x (sed "\(([[:word:]].*?)\)(?!\w)(.*)"
   		   (append "⁽" (superscript n) "⁾\2"
   			   (if (> 1 n) " " "")
   			   (superscript n) " \1")
@@ -405,6 +405,7 @@ the pattern described by it."
   (setq x (sed "\blol\s+" "LOL, " "gi" x))
   (setq x (sed "\birc\s+" "IRC" "gi" x))
   (setq x (sed "\$" "zł" "g" x))
+  (setq x (sed "£" "zł" "g" x))
   (setq x (sed "\s+-+\s+" "—" "g" x))
   (setq x (sed "\s+" " " "g" x))
   (setq x (sed "fahrenheit" "Celsius" "gi" x))
