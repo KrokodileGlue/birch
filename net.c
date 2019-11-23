@@ -26,7 +26,7 @@ void net_read(const struct net *n, char *buf)
 	size_t len = 0;
 	while (len >= 2
 	       ? strncmp(buf + len - 2, "\r\n", 2)
-	       : buf[len - 1] != EOF)
+	       : len >= 1 ? buf[len - 1] != EOF : 1)
 		buf[len++] = read_char(n->sock), buf[len] = 0;
 	len >= 2 ? (buf[len - 2] = 0) : (buf[len - 1] = 0);
 }

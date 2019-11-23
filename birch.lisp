@@ -3,14 +3,23 @@
 (defq config-file "birch.lisp")
 
 (defq msg-hook '((lambda (line) (stdout (format-line line) "\n"))
-		 ;(lambda (line) (stdout (mpanize (get-body line)) "\n"))
 		 sed-line
 		 command
-		 log-line))
+		 log-line
+		 log-line
+                 (lambda (line)
+		   (if (match "ball?anced penalties" "i" (get-body line))
+                       (eval ~(mock ,(get-nick line)))))
+                 (lambda (line)
+		   (cond (match "Please contact this bot" "" (get-body line))
+			 "mnrmnaugh: the boat is broke"))))
 
-(defq join-hook '(init-channel
-		  (lambda (serv chan)
-		    (append "Hello " chan "!"))))
+(defq ctcp-hook '((action . log-line)
+		  (action . sed-line)
+		  (action . command)
+		  (version . (lambda (line) '"birch :D"))))
+
+(defq join-hook '(init-channel))
 
 ;; Initialize global variables.
 
@@ -38,6 +47,7 @@
 (defun get-date (line) (nth line 0))
 (defun get-nick (line) (nth line 1))
 (defun get-body (line) (nth line 2))
+(defun is-action (line) (nth line 3))
 
 (defun lispize-line (input)
   "Returns the expanded form of a message that contains embedded \
@@ -221,7 +231,9 @@ message."
 	  (if (string= guy target)
 	      (append guy " meant to say: ")
 	    (append guy " thinks " target " meant to say: ")))
-    (append prefix result)))
+    (append prefix
+	    (if (is-action subject) (append "* " target " ") "")
+	    result)))
 
 (defun parse-sed (string)
   "Parse the contents of STRING as a sed command. If there is no sed \
@@ -298,7 +310,11 @@ the pattern described by it."
 
 (defun format-line (line)
   "Produce a string representation of LINE in a log-like format."
-  (append (get-date line) " <" (get-nick line) "> " (get-body line)))
+  (append (get-date line)
+	  (if (is-action line)
+	      (append " * " (get-nick line) " ")
+	    (append " <" (get-nick line) "> "))
+	  (get-body line)))
 
 (defun ping () '"pong")
 
@@ -436,5 +452,5 @@ message."
 	result
       (append "No matching message found for " nick "."))))
 
-(in "freenode/##c-offtopic" defq trigger "\.")
+(in "freenode/##c-offtopic" defq trigger ";(?![()^]|p;)")
 (in "kroknet/#test2" defq trigger "\.")
